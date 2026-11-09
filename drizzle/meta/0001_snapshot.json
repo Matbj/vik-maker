@@ -176,17 +176,17 @@
           "primaryKey": false,
           "notNull": true
         },
-        "status": {
-          "name": "status",
-          "type": "attendance_status",
+        "player_response": {
+          "name": "player_response",
+          "type": "player_response",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'unanswered'"
         },
-        "check_status": {
-          "name": "check_status",
-          "type": "attendance_check_status",
+        "coach_check": {
+          "name": "coach_check",
+          "type": "coach_check",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
@@ -471,16 +471,16 @@
     }
   },
   "enums": {
-    "public.attendance_check_status": {
-      "name": "attendance_check_status",
+    "public.coach_check": {
+      "name": "coach_check",
       "schema": "public",
       "values": [
         "present",
         "absent"
       ]
     },
-    "public.attendance_status": {
-      "name": "attendance_status",
+    "public.player_response": {
+      "name": "player_response",
       "schema": "public",
       "values": [
         "attending",

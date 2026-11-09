@@ -66,13 +66,13 @@ export const workouts = pgTable(
   (t) => [uniqueIndex("workouts_svenskalag_id_idx").on(t.svenskalagId)],
 );
 
-export const attendanceStatus = pgEnum("attendance_status", [
+export const playerResponse = pgEnum("player_response", [
   "attending",
   "declined",
   "unanswered",
 ]);
 
-export const attendanceCheckStatus = pgEnum("attendance_check_status", ["present", "absent"]);
+export const coachCheck = pgEnum("coach_check", ["present", "absent"]);
 
 /** Each player's answer to a workout, and the coaches' attendance check on it. */
 export const workoutAttendance = pgTable(
@@ -85,9 +85,9 @@ export const workoutAttendance = pgTable(
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
     /** What the player answered. */
-    status: attendanceStatus("status").notNull().default("unanswered"),
+    playerResponse: playerResponse("player_response").notNull().default("unanswered"),
     /** What the coaches recorded in the attendance check. Null until attendance is registered. */
-    checkStatus: attendanceCheckStatus("check_status"),
+    coachCheck: coachCheck("coach_check"),
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workoutId, t.playerId] })],
