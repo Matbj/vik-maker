@@ -69,8 +69,8 @@ On a workout's page, coaches create groups by hand, and they stay until replaced
 - **Leveled groups** are computed by Claude from each player's level and recent attendance and
   groups. It rotates some players up or down so groups don't go stale. Code checks the result:
   nobody ever moves more than one level. Players are sent as anonymous ids, never names.
-- **Teams** are built without AI: players are dealt out by level so teams are even, and any
-  players beyond the requested size are listed as reserves. With 4 or more teams they can be
+- **Teams** are built without AI: players are dealt out by level so teams are even, and every
+  player gets a spot, so team sizes differ by at most one. With 4 or more teams they can be
   split into two leagues by level.
 
 ## svenskalag.se integration

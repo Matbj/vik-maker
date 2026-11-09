@@ -22,7 +22,6 @@ const levelGroupsForm = z.object({
 const teamsForm = z.object({
   workoutId: z.uuid(),
   teamCount: z.coerce.number().int().min(1).max(16),
-  teamSize: z.coerce.number().int().min(1).max(30),
   twoLeagues: z.literal("on").optional(),
 });
 
@@ -105,8 +104,8 @@ export async function createTeams(
   formData: FormData,
 ): Promise<GroupingState> {
   const form = teamsForm.safeParse(Object.fromEntries(formData));
-  if (!form.success) return { error: "Check the number of teams and players per team." };
-  const { workoutId, teamCount, teamSize, twoLeagues } = form.data;
+  if (!form.success) return { error: "Choose between 1 and 16 teams." };
+  const { workoutId, teamCount, twoLeagues } = form.data;
 
   try {
     const { players } = await loadWorkoutPlayers(workoutId, await loadLevelOrder());
@@ -116,7 +115,6 @@ export async function createTeams(
 
     const teams = buildTeams(players, {
       teamCount,
-      teamSize,
       twoLeagues: Boolean(twoLeagues) && teamCount >= 4,
     });
     await replaceGroups(

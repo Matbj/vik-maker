@@ -23,16 +23,15 @@ function snakeDraft(players: TeamPlayer[], teamCount: number) {
   return teams;
 }
 
-/** Exactly `teamSize` per team when there are enough players; anyone beyond that is a reserve. */
+/** Everyone plays: team sizes differ by at most one within a league. */
 export function buildTeams(
   players: TeamPlayer[],
-  options: { teamCount: number; teamSize: number; twoLeagues: boolean },
+  options: { teamCount: number; twoLeagues: boolean },
   random: () => number = Math.random,
 ): BuiltTeam[] {
-  const { teamCount, teamSize, twoLeagues } = options;
-  const mixed = shuffled(players, random);
-  const playing = mixed.slice(0, teamCount * teamSize).sort((a, b) => a.levelRank - b.levelRank);
-  const reserves = mixed.slice(teamCount * teamSize);
+  const { teamCount, twoLeagues } = options;
+  // Shuffled first, so the sort only fixes the level order and teams vary within it.
+  const playing = shuffled(players, random).sort((a, b) => a.levelRank - b.levelRank);
 
   const firstLeagueTeams = twoLeagues ? Math.ceil(teamCount / 2) : teamCount;
   const firstLeaguePlayers = Math.round((playing.length * firstLeagueTeams) / teamCount);
@@ -47,11 +46,7 @@ export function buildTeams(
   ];
 
   let teamNumber = 0;
-  const teams: BuiltTeam[] = drafted.flatMap(({ league, teams: playerIds }) =>
-    playerIds.map((ids) => ({ name: `Team ${++teamNumber}`, league, playerIds: ids })),
+  return drafted.flatMap(({ league, teams }) =>
+    teams.map((playerIds) => ({ name: `Team ${++teamNumber}`, league, playerIds })),
   );
-  if (reserves.length > 0) {
-    teams.push({ name: "Reserves", league: null, playerIds: reserves.map((p) => p.id) });
-  }
-  return teams;
 }

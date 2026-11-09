@@ -17,37 +17,78 @@ function FormError({ state }: { state: GroupingState }) {
   );
 }
 
+/**
+ * The number of groups and the players per group, linked through the number of players.
+ * The count is what gets used: a size only picks the closest count, and then shows what
+ * that count really gives. Typing is kept as drafts so a half-typed number isn't overwritten.
+ */
+function useLinkedCounts(playerCount: number, initialCount: number, maxCount: number) {
+  const limit = Math.max(1, Math.min(maxCount, playerCount));
+  const clamp = (value: number) => Math.min(Math.max(1, value), limit);
+  const [count, setCount] = useState(clamp(initialCount));
+  const [countDraft, setCountDraft] = useState<string | null>(null);
+  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
+
+  return {
+    count,
+    countInput: {
+      value: countDraft ?? String(count),
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+        setCountDraft(event.target.value);
+        const value = Number(event.target.value);
+        if (value > 0) setCount(clamp(Math.round(value)));
+      },
+      onBlur: () => setCountDraft(null),
+    },
+    sizeInput: {
+      value: sizeDraft ?? String(Math.round(playerCount / count)),
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSizeDraft(event.target.value);
+        const value = Number(event.target.value);
+        if (value > 0) setCount(clamp(Math.round(playerCount / value)));
+      },
+      onBlur: () => setSizeDraft(null),
+    },
+    smallest: Math.floor(playerCount / count),
+    largest: Math.ceil(playerCount / count),
+  };
+}
+
 export function LevelGroupsForm({
   workoutId,
+  playerCount,
   initialCount,
   hasGroups,
 }: {
   workoutId: string;
+  playerCount: number;
   initialCount: number;
   hasGroups: boolean;
 }) {
   const [state, action, pending] = useActionState(createLevelGroups, {});
+  const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 12);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workoutId" value={workoutId} />
+      <input type="hidden" name="groupCount" value={count} />
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           Groups
-          <input
-            name="groupCount"
-            type="number"
-            min={1}
-            max={12}
-            defaultValue={initialCount}
-            required
-            className={inputClass}
-          />
+          <input type="number" min={1} className={inputClass} {...countInput} />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          Players per group
+          <input type="number" min={1} className={inputClass} {...sizeInput} />
         </label>
         <button type="submit" disabled={pending} className={buttonClass}>
           {pending ? "Thinking…" : hasGroups ? "Create new groups" : "Create groups"}
         </button>
       </div>
-      {pending && <p className="text-sm text-muted">This takes a few seconds.</p>}
+      <p className="text-sm text-muted">
+        {pending
+          ? "This takes a few seconds."
+          : `${count} ${count === 1 ? "group" : "groups"} of about ${smallest === largest ? smallest : `${smallest}–${largest}`} players`}
+      </p>
       <FormError state={state} />
     </form>
   );
@@ -55,47 +96,31 @@ export function LevelGroupsForm({
 
 export function TeamsForm({
   workoutId,
+  playerCount,
   initialCount,
-  initialSize,
   hasTeams,
 }: {
   workoutId: string;
+  playerCount: number;
   initialCount: number;
-  initialSize: number;
   hasTeams: boolean;
 }) {
   const [state, action, pending] = useActionState(createTeams, {});
-  const [teamCount, setTeamCount] = useState(initialCount);
+  const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 16);
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workoutId" value={workoutId} />
+      <input type="hidden" name="teamCount" value={count} />
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           Teams
-          <input
-            name="teamCount"
-            type="number"
-            min={1}
-            max={16}
-            value={teamCount}
-            onChange={(event) => setTeamCount(Number(event.target.value))}
-            required
-            className={inputClass}
-          />
+          <input type="number" min={1} className={inputClass} {...countInput} />
         </label>
         <label className="flex items-center gap-2 text-sm">
           Players per team
-          <input
-            name="teamSize"
-            type="number"
-            min={1}
-            max={30}
-            defaultValue={initialSize}
-            required
-            className={inputClass}
-          />
+          <input type="number" min={1} className={inputClass} {...sizeInput} />
         </label>
-        {teamCount >= 4 && (
+        {count >= 4 && (
           <label className="flex items-center gap-2 text-sm">
             <input name="twoLeagues" type="checkbox" />
             Two leagues
@@ -105,6 +130,9 @@ export function TeamsForm({
           {pending ? "Creating…" : hasTeams ? "Create new teams" : "Create teams"}
         </button>
       </div>
+      <p className="text-sm text-muted">
+        {count} {count === 1 ? "team" : "teams"} of {smallest === largest ? smallest : `${smallest}–${largest}`} players
+      </p>
       <FormError state={state} />
     </form>
   );

@@ -77,7 +77,6 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   }));
   const levelGroups = groups.filter((g) => g.kind === "level");
   const teams = groups.filter((g) => g.kind === "team");
-  const realTeams = teams.filter((t) => t.name !== "Reserves");
 
   return (
     <div className="space-y-8">
@@ -102,6 +101,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         <h2 className="text-lg font-semibold">Leveled groups</h2>
         <LevelGroupsForm
           workoutId={id}
+          playerCount={players.length}
           initialCount={levelGroups.length || 4}
           hasGroups={levelGroups.length > 0}
         />
@@ -130,8 +130,8 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         <h2 className="text-lg font-semibold">Teams</h2>
         <TeamsForm
           workoutId={id}
-          initialCount={realTeams.length || 4}
-          initialSize={realTeams[0]?.members.length || 5}
+          playerCount={players.length}
+          initialCount={teams.length || 4}
           hasTeams={teams.length > 0}
         />
         <div className="grid gap-3 sm:grid-cols-2">
