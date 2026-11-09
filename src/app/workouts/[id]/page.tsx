@@ -199,6 +199,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           playerCount={players.length}
           initialCount={teams.length || Math.round(players.length / DEFAULT_PLAYERS_PER_TEAM)}
           hasTeams={teams.length > 0}
+          hasLevelGroups={levelGroups.length > 0}
         />
         <div className="grid gap-3 sm:grid-cols-2">
           {teams.map((team) => (

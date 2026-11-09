@@ -9,6 +9,7 @@ import { UserError } from "@/lib/errors";
 import { proposeLevelGroups, proposeSpread, proposeTeams } from "@/lib/grouping/claude-groups";
 import { loadGroupingPreferences } from "@/lib/grouping/preferences";
 import {
+  loadLevelGroups,
   loadLevelOrder,
   loadRecentTeams,
   loadWorkoutPlayers,
@@ -29,6 +30,7 @@ const teamsForm = z.object({
   workoutId: z.uuid(),
   teamCount: z.coerce.number().int().min(1).max(16),
   twoLeagues: z.literal("on").optional(),
+  keepGroups: z.literal("on").optional(),
 });
 
 async function replaceGroups(workoutId: string, kind: "level" | "team", groups: NewGroup[]) {
@@ -199,7 +201,7 @@ export async function createTeams(
 ): Promise<GroupingState> {
   const form = teamsForm.safeParse(Object.fromEntries(formData));
   if (!form.success) return { error: "Välj mellan 1 och 16 lag." };
-  const { workoutId, teamCount, twoLeagues } = form.data;
+  const { workoutId, teamCount, twoLeagues, keepGroups } = form.data;
 
   try {
     const workout = await loadWorkout(workoutId);
@@ -214,6 +216,7 @@ export async function createTeams(
       levelOrder,
       { teamCount, twoLeagues: Boolean(twoLeagues) && teamCount >= 4 },
       await loadRecentTeams(workoutId, workout.startsAt),
+      keepGroups ? await loadLevelGroups(workoutId) : [],
       await loadGroupingPreferences(),
     );
     await replaceGroups(

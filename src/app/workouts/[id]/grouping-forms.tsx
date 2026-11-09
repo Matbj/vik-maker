@@ -163,11 +163,13 @@ export function TeamsForm({
   playerCount,
   initialCount,
   hasTeams,
+  hasLevelGroups,
 }: {
   workoutId: string;
   playerCount: number;
   initialCount: number;
   hasTeams: boolean;
+  hasLevelGroups: boolean;
 }) {
   const [state, action, pending] = useActionState(createTeams, {});
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 16);
@@ -188,6 +190,12 @@ export function TeamsForm({
           <label className="flex items-center gap-2 text-sm">
             <input name="twoLeagues" type="checkbox" />
             Två serier
+          </label>
+        )}
+        {hasLevelGroups && (
+          <label className="flex items-center gap-2 text-sm">
+            <input name="keepGroups" type="checkbox" />
+            Behåll nivågrupperna så långt det går
           </label>
         )}
         <button type="submit" disabled={pending} className={buttonClass}>

@@ -110,6 +110,23 @@ export async function loadRecentTeams(workoutId: string, workoutStartsAt: Date) 
   });
 }
 
+/** The leveled groups of a workout as lists of player ids, strongest first. */
+export async function loadLevelGroups(workoutId: string) {
+  const { workoutGroups, workoutGroupMembers } = schema;
+  const rows = await getDb()
+    .select({ groupId: workoutGroups.id, playerId: workoutGroupMembers.playerId })
+    .from(workoutGroupMembers)
+    .innerJoin(workoutGroups, eq(workoutGroups.id, workoutGroupMembers.groupId))
+    .where(and(eq(workoutGroups.workoutId, workoutId), eq(workoutGroups.kind, "level")))
+    .orderBy(asc(workoutGroups.sortOrder));
+
+  const groups = new Map<string, string[]>();
+  for (const { groupId, playerId } of rows) {
+    groups.set(groupId, [...(groups.get(groupId) ?? []), playerId]);
+  }
+  return [...groups.values()];
+}
+
 /** Adds each player's recent attendance and groups, newest first, from workouts already played. */
 export async function withHistory(
   players: WorkoutPlayer[],
