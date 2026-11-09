@@ -24,13 +24,18 @@ npm run dev
 
 | Script | What it does |
 | --- | --- |
-| `npm run dev` / `build` / `start` | Next.js |
+| `npm run dev` / `start` | Next.js |
+| `npm run build` | Next.js build; on production Vercel deploys, applies migrations and seeds levels first |
 | `npm run lint` / `typecheck` | ESLint / TypeScript |
 | `npm run db:generate` | Generate a migration from `src/db/schema.ts` |
 | `npm run db:migrate` | Apply migrations to `DATABASE_URL` |
+| `npm run db:migrate:runtime` | Apply migrations with the script used in production builds (prefers `DATABASE_URL_UNPOOLED`) |
 | `npm run db:push` | Push schema directly (quick prototyping only) |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run db:seed` | Seed default levels |
+
+Production deploys apply migrations automatically during the build. Migrations must stay
+backward compatible, because they run before the new code is live.
 
 ## Layout
 
