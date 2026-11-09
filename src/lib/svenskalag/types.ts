@@ -1,4 +1,4 @@
-/** Shapes we expect to extract from svenskalag.se. Adjust once we've seen real pages. */
+/** Shapes we extract from svenskalag.se. */
 
 export type SvenskalagWorkout = {
   /** svenskalag's own id for the activity (from the URL or a data attribute). */

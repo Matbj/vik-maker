@@ -1,28 +1,30 @@
 import "server-only";
 import { env, requireEnv } from "@/lib/env";
+import {
+  calendarMonthPath,
+  parseCalendarMonth,
+  parsePresence,
+  parseResponses,
+  SvenskalagParseError,
+} from "./parse";
 import type { SvenskalagAttendance, SvenskalagWorkout } from "./types";
 
+/** Pause between page loads, to be gentle with svenskalag.se. */
+const REQUEST_DELAY_MS = 250;
+
 /**
- * svenskalag.se has no public API, so this client will log in with the
- * coach's own account and read the same pages a browser would.
+ * svenskalag.se has no public API, so this client logs in with the coach's
+ * own account and reads the same pages a browser would.
  *
  * Rules for this module:
  * - Server-only. Credentials come from env vars and never reach the client.
  * - Session cookies are kept in memory on the server, never in the repo.
- * - Read-only. We never change anything on svenskalag.se.
- *
- * Planned approach (to be filled in once we've inspected the real pages):
- * 1. POST the login form (plus any anti-forgery token from the login page)
- *    and keep the resulting session cookie.
- * 2. Fetch the team's activity/calendar page and parse the training
- *    sessions. Prefer any JSON endpoint the page itself calls (look in the
- *    browser's network tab) over HTML scraping, since it's far less brittle.
- * 3. For each workout, fetch the attendance list.
- * If plain HTTP turns out not to work (heavy JS, bot protection), fall back
- * to a headless browser (Playwright) running in a server job.
+ * - Read-only. The login POST is the only non-GET request; never call the
+ *   endpoints that save replies, send invites or register attendance.
+ * - Activity pages include guardians' phone numbers. Never store or log raw HTML.
  */
 export class SvenskalagClient {
-  private cookie: string | undefined;
+  private cookies = new Map<string, string>();
 
   constructor(
     private readonly baseUrl = env.SVENSKALAG_BASE_URL,
@@ -34,29 +36,98 @@ export class SvenskalagClient {
   }
 
   async login(): Promise<void> {
-    requireEnv("SVENSKALAG_USERNAME");
-    requireEnv("SVENSKALAG_PASSWORD");
-    throw new NotImplementedError("SvenskalagClient.login");
+    const response = await fetch(`${this.baseUrl}${this.teamPath}/logga-in`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: new URLSearchParams({
+        userName: requireEnv("SVENSKALAG_USERNAME"),
+        userNameSite: "",
+        userPass: requireEnv("SVENSKALAG_PASSWORD"),
+        cbautologin: "on",
+      }),
+    });
+    if (!response.ok) throw new Error(`svenskalag.se login failed with ${response.status}`);
+
+    const result = (await response.json()) as { error?: string };
+    if (result.error) throw new Error(`svenskalag.se login failed: ${result.error}`);
+
+    this.storeCookies(response);
+    if (this.cookies.size === 0) throw new SvenskalagParseError("login set no session cookie");
   }
 
   async fetchWorkouts(range: { from: Date; to: Date }): Promise<SvenskalagWorkout[]> {
     await this.ensureSession();
-    throw new NotImplementedError(`SvenskalagClient.fetchWorkouts (${range.from.toISOString()}–${range.to.toISOString()})`);
+    const workouts: SvenskalagWorkout[] = [];
+    const month = new Date(Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), 1));
+
+    while (month <= range.to) {
+      const html = await this.get(`${this.teamPath}/kalender/${calendarMonthPath(month)}`);
+      workouts.push(...parseCalendarMonth(html, month.getUTCFullYear(), month.getUTCMonth() + 1));
+      month.setUTCMonth(month.getUTCMonth() + 1);
+    }
+
+    return workouts.filter((w) => w.startsAt >= range.from && w.startsAt <= range.to);
   }
 
   async fetchAttendance(workoutId: string): Promise<SvenskalagAttendance[]> {
     await this.ensureSession();
-    throw new NotImplementedError(`SvenskalagClient.fetchAttendance (${workoutId})`);
+    const responses = parseResponses(await this.get(`${this.teamPath}/aktivitet/${workoutId}`));
+    const presence = parsePresence(
+      await this.get(`${this.teamPath}/controlpanel/presence/chooseparticipants/${workoutId}?reload=false`),
+    );
+
+    const present = new Set(presence.players.map((p) => p.memberId));
+    const coachCheck = (memberId: string) => {
+      if (!presence.registered) return null;
+      return present.has(memberId) ? ("present" as const) : ("absent" as const);
+    };
+
+    const answered = new Set(responses.map((r) => r.memberId));
+    return [
+      ...responses.map((r) => ({
+        workoutId,
+        playerSvenskalagId: r.memberId,
+        playerName: r.name,
+        playerResponse: r.response,
+        coachCheck: coachCheck(r.memberId),
+      })),
+      // Players the coaches marked present without them ever answering.
+      ...presence.players
+        .filter((p) => !answered.has(p.memberId))
+        .map((p) => ({
+          workoutId,
+          playerSvenskalagId: p.memberId,
+          playerName: p.name,
+          playerResponse: "unanswered" as const,
+          coachCheck: "present" as const,
+        })),
+    ];
   }
 
   private async ensureSession() {
-    if (!this.cookie) await this.login();
+    if (this.cookies.size === 0) await this.login();
   }
-}
 
-export class NotImplementedError extends Error {
-  constructor(what: string) {
-    super(`${what} is not implemented yet`);
-    this.name = "NotImplementedError";
+  private async get(path: string) {
+    await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS));
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      cache: "no-store",
+      headers: { Cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ") },
+    });
+    if (!response.ok) throw new Error(`svenskalag.se returned ${response.status} for ${path}`);
+    this.storeCookies(response);
+    return response.text();
+  }
+
+  private storeCookies(response: Response) {
+    for (const cookie of response.headers.getSetCookie()) {
+      const [pair] = cookie.split(";");
+      const separator = pair.indexOf("=");
+      this.cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
+    }
   }
 }

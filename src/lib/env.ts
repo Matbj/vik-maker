@@ -8,9 +8,10 @@ import { z } from "zod";
 const schema = z.object({
   DATABASE_URL: z.string().url().optional(),
   SVENSKALAG_BASE_URL: z.string().url().default("https://www.svenskalag.se"),
-  SVENSKALAG_TEAM_PATH: z.string().optional(),
+  SVENSKALAG_TEAM_PATH: z.string().default("/vendelsoik-p10"),
   SVENSKALAG_USERNAME: z.string().optional(),
   SVENSKALAG_PASSWORD: z.string().optional(),
+  CRON_SECRET: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

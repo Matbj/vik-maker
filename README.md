@@ -33,6 +33,7 @@ npm run dev
 | `npm run db:push` | Push schema directly (quick prototyping only) |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run db:seed` | Seed default levels |
+| `npm run sync:svenskalag` | Sync workouts and attendance now (`-- --dry-run` reads svenskalag.se and prints counts without writing) |
 
 Production deploys apply migrations automatically during the build. Migrations must stay
 backward compatible, because they run before the new code is live.
@@ -47,7 +48,7 @@ src/
   db/index.ts             lazy Neon/Drizzle client (server-only)
   lib/env.ts              validated server env
   lib/grouping/           pure group-building logic
-  lib/svenskalag/         svenskalag.se client + sync (placeholder)
+  lib/svenskalag/         svenskalag.se client, page parsers and sync
 drizzle/                  SQL migrations
 scripts/seed.ts           seeds levels
 ```
@@ -66,4 +67,11 @@ There is no public API, so the integration logs in with a coach's own account an
 the pages (or the JSON endpoints those pages call). It lives in `src/lib/svenskalag/` and is
 **server-only**: credentials come from env vars (`SVENSKALAG_*`), session cookies stay in
 server memory, and nothing is ever committed. It is read-only towards svenskalag.se.
-The client is currently a stub; see the comments in `client.ts` for the planned approach.
+
+Trainings come from the monthly calendar. Each player's answer comes from the activity page,
+and the coaches' check from the "Fyll i närvaro" page. A page that doesn't look as expected
+fails the sync instead of overwriting data.
+
+Vercel Cron calls `/api/cron/sync-svenskalag` once a day, covering the last 14 days and the
+next 28. It needs `SVENSKALAG_USERNAME`, `SVENSKALAG_PASSWORD` and `CRON_SECRET` in the
+Vercel project. A player's level is never changed by the sync.
