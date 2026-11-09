@@ -11,8 +11,8 @@ const listClass =
 export default function TeamPage() {
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Laget</h1>
-      <Suspense fallback={<p className="text-sm text-muted">Laddar laget…</p>}>
+      <h1 className="text-2xl font-semibold">Truppen</h1>
+      <Suspense fallback={<p className="text-sm text-muted">Laddar truppen…</p>}>
         <Team />
       </Suspense>
     </section>
@@ -34,7 +34,12 @@ async function Team() {
   const db = getDb();
   const [coaches, players] = await Promise.all([
     db
-      .select({ id: schema.coaches.id, name: schema.coaches.name, phone: schema.coaches.phone })
+      .select({
+        id: schema.coaches.id,
+        name: schema.coaches.name,
+        phone: schema.coaches.phone,
+        role: schema.coaches.role,
+      })
       .from(schema.coaches)
       // The sync clears both for anyone no longer listed as a coach on svenskalag.se.
       .where(or(isNotNull(schema.coaches.phone), isNotNull(schema.coaches.email)))
@@ -59,7 +64,10 @@ async function Team() {
           <ul className={listClass}>
             {coaches.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                <span>{c.name}</span>
+                <span className="min-w-0">
+                  <span className="block">{c.name}</span>
+                  {c.role && <span className="block text-sm text-muted">{c.role}</span>}
+                </span>
                 {c.phone ? (
                   <a href={`tel:${c.phone.replace(/[^\d+]/g, "")}`} className="shrink-0 text-accent underline">
                     {c.phone}

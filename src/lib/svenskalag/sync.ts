@@ -61,8 +61,8 @@ export async function syncWorkouts(range: { from: Date; to: Date }) {
 }
 
 /**
- * Copies emails and phone numbers from svenskalag.se's contact list onto the coaches we know, matched by name.
- * Someone no longer listed as a coach loses both, and with the email the ability to log in.
+ * Copies emails, phone numbers and roles from svenskalag.se's contact list onto the coaches we know, matched by name.
+ * Someone no longer listed as a coach loses them all, and with the email the ability to log in.
  */
 export async function syncCoachContacts(client = new SvenskalagClient()) {
   const db = getDb();
@@ -71,7 +71,7 @@ export async function syncCoachContacts(client = new SvenskalagClient()) {
   const byName = new Map(contacts.map((c) => [normalizeName(c.name), c]));
 
   const known = await db
-    .select({ id: coaches.id, name: coaches.name, email: coaches.email, phone: coaches.phone })
+    .select({ id: coaches.id, name: coaches.name, email: coaches.email, phone: coaches.phone, role: coaches.role })
     .from(coaches);
   let updated = 0;
   let withEmail = 0;
@@ -80,10 +80,11 @@ export async function syncCoachContacts(client = new SvenskalagClient()) {
     const contact = byName.get(normalizeName(coach.name));
     const email = contact?.email ?? null;
     const phone = contact?.phone ?? null;
+    const role = contact?.role ?? null;
     if (email) withEmail++;
     if (phone) withPhone++;
-    if (email === coach.email && phone === coach.phone) continue;
-    await db.update(coaches).set({ email, phone }).where(eq(coaches.id, coach.id));
+    if (email === coach.email && phone === coach.phone && role === coach.role) continue;
+    await db.update(coaches).set({ email, phone, role }).where(eq(coaches.id, coach.id));
     updated++;
   }
 

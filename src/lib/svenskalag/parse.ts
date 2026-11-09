@@ -35,7 +35,7 @@ export type ParsedResponse = {
   response: "attending" | "declined" | "unanswered";
 };
 
-export type ParsedCoachContact = { name: string; email: string | null; phone: string | null };
+export type ParsedCoachContact = { name: string; email: string | null; phone: string | null; role: string | null };
 
 export type ParsedMember = { memberId: string; name: string; role: MemberRole };
 
@@ -146,7 +146,7 @@ function quoteObjectKeys(literal: string) {
 }
 
 /**
- * Coaches' names, emails and phone numbers from the contact list, which has no member ids.
+ * Coaches' names, roles, emails and phone numbers from the contact list, which has no member ids.
  * Reads only the "Ledare" section, so parents' contact details are never picked up.
  */
 export function parseCoachContacts(html: string): ParsedCoachContact[] {
@@ -169,11 +169,13 @@ export function parseCoachContacts(html: string): ParsedCoachContact[] {
       const phone = [...row.matchAll(/href="tel:[^"]*"[^>]*>([^<]*)</g)]
         .map((link) => decodeHtml(link[1]).trim().replace(/\s*-\s*/, "-"))
         .find(Boolean);
+      const role = row.match(/<i class="text-muted">([^<]*)</)?.[1];
       return [
         {
           name: decodeHtml(name).trim(),
           email: email ? decodeHtml(email).trim().toLowerCase() : null,
           phone: phone ?? null,
+          role: role ? decodeHtml(role).trim() || null : null,
         },
       ];
     });
