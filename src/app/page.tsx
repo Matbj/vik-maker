@@ -105,7 +105,7 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
           <li key={w.id}>
             <Link href={`/workouts/${w.id}`} className="flex items-center justify-between gap-4 px-4 py-3">
             <div className="min-w-0">
-              <p className="font-medium">
+              <p className="font-medium first-letter:uppercase">
                 {dateFormat.format(w.startsAt)}, {timeFormat.format(w.startsAt)}
                 {w.endsAt && `–${timeFormat.format(w.endsAt)}`}
               </p>

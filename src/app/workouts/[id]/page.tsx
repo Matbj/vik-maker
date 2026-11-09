@@ -107,7 +107,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           <RefreshAttendanceButton workoutId={id} />
         </div>
         <p className="mt-3 text-sm text-muted">
-          <span className="text-base font-medium text-foreground">{whenFormat.format(workout.startsAt)}</span>
+          <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
           {workout.location && ` · ${workout.location}`}
         </p>
         <p className="mt-4 text-sm text-muted">
