@@ -6,7 +6,7 @@ import { addSeparation, saveGroupingNotes } from "./actions";
 const fieldClass =
   "rounded-lg border border-black/10 bg-transparent px-2 py-2 text-sm dark:border-white/10";
 const buttonClass =
-  "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
+  "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50";
 
 export function AddSeparationForm({ players }: { players: { id: string; name: string }[] }) {
   const [state, action, pending] = useActionState(addSeparation, {});
@@ -18,20 +18,20 @@ export function AddSeparationForm({ players }: { players: { id: string; name: st
   return (
     <form action={action} className="space-y-2">
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-        <select name="playerA" aria-label="First player" required defaultValue="" className={fieldClass}>
+        <select name="playerA" aria-label="Första spelaren" required defaultValue="" className={fieldClass}>
           <option value="" disabled>
-            Choose a player
+            Välj en spelare
           </option>
           {options}
         </select>
-        <select name="playerB" aria-label="Second player" required defaultValue="" className={fieldClass}>
+        <select name="playerB" aria-label="Andra spelaren" required defaultValue="" className={fieldClass}>
           <option value="" disabled>
-            Choose a player
+            Välj en spelare
           </option>
           {options}
         </select>
         <button type="submit" disabled={pending} className={buttonClass}>
-          Keep apart
+          Håll isär
         </button>
       </div>
       {state.error && (
@@ -49,18 +49,18 @@ export function GroupingNotesForm({ initialNotes }: { initialNotes: string }) {
     <form action={action} className="space-y-2">
       <textarea
         name="notes"
-        aria-label="Notes for grouping"
+        aria-label="Anteckningar för gruppindelning"
         rows={5}
         maxLength={2000}
         defaultValue={initialNotes}
-        placeholder="For example: keep the groups close in size, even if a few players need to move."
+        placeholder="Till exempel: håll grupperna ungefär lika stora, även om några spelare behöver flytta."
         className={`${fieldClass} w-full`}
       />
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Saving…" : "Save notes"}
+          {pending ? "Sparar…" : "Spara anteckningar"}
         </button>
-        {state.saved && !pending && <span className="text-sm text-muted">Saved</span>}
+        {state.saved && !pending && <span className="text-sm text-muted">Sparat</span>}
         {state.error && (
           <span role="alert" className="text-sm text-red-600 dark:text-red-400">
             {state.error}

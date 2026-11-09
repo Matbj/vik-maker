@@ -31,10 +31,10 @@ const whenFormat = new Intl.DateTimeFormat("sv-SE", {
 export default function WorkoutPage({ params }: PageProps<"/workouts/[id]">) {
   return (
     <section className="space-y-6">
-      <Link href="/" className="text-sm text-muted">
-        ← Workouts
+      <Link href="/" className="inline-block text-sm text-muted">
+        ← Träningar
       </Link>
-      <Suspense fallback={<p className="text-sm text-muted">Loading workout…</p>}>
+      <Suspense fallback={<p className="text-sm text-muted">Laddar träningen…</p>}>
         <Workout params={params} />
       </Suspense>
     </section>
@@ -51,7 +51,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   if (!workout) notFound();
 
   const levelOrder = await loadLevelOrder();
-  const [{ players, registered, absences }, coachAttendance, groupRows, memberRows] = await Promise.all([
+  const [{ players, registered, unanswered, absences }, coachAttendance, groupRows, memberRows] = await Promise.all([
     loadWorkoutPlayers(id, levelOrder),
     loadWorkoutCoaches(id),
     db
@@ -84,10 +84,10 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
 
   const here = new Set(players.map((player) => player.id));
   const absenceOf = (playerId: string) =>
-    here.has(playerId) ? null : (absences.get(playerId) ?? "Not attending");
+    here.has(playerId) ? null : (absences.get(playerId) ?? "Kommer inte");
   const countLabel = (members: { id: string }[]) => {
     const missing = members.filter((member) => !here.has(member.id)).length;
-    return missing > 0 ? `${members.length - missing} + ${missing} absent` : String(members.length);
+    return missing > 0 ? `${members.length - missing} + ${missing} frånvarande` : String(members.length);
   };
 
   const inGroup = new Set(levelGroups.flatMap((g) => g.members.map((m) => m.id)));
@@ -106,33 +106,33 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           <h1 className="min-w-0 text-2xl font-semibold">{workout.title}</h1>
           <RefreshAttendanceButton workoutId={id} />
         </div>
-        <p className="text-sm text-muted">
-          {whenFormat.format(workout.startsAt)}
+        <p className="mt-3 text-sm text-muted">
+          <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
           {workout.location && ` · ${workout.location}`}
         </p>
-        <p className="mt-1 text-sm text-muted">
-          {players.length} {registered ? "players present" : "players attending"}
+        <p className="mt-4 text-sm text-muted">
+          {players.length} {registered ? "spelare närvarande" : "spelare"} · {unanswered} inget svar
         </p>
-        <p className="text-sm text-muted">
+        <p className="mt-1.5 text-sm text-muted">
           {coachAttendance.coaches.length}{" "}
-          {coachAttendance.registered ? "coaches present" : "coaches attending"}
+          {coachAttendance.registered ? "ledare närvarande" : "ledare"}
           {coachAttendance.coaches.length > 0 &&
             `: ${coachAttendance.coaches.map((coach) => coach.name.split(" ")[0]).join(", ")}`}
+          {` · ${coachAttendance.unanswered} inget svar`}
         </p>
-        <p className="mt-1 text-xs text-muted">Updated {whenFormat.format(workout.syncedAt)}</p>
+        <p className="mt-3 text-xs text-muted">Uppdaterad {whenFormat.format(workout.syncedAt)}</p>
       </header>
 
       {absentCount > 0 && (
-        <p role="status" className="rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white">
-          {absentCount} {absentCount === 1 ? "player" : "players"} in the groups or teams below{" "}
-          {absentCount === 1 ? "is" : "are"} no longer coming.
+        <p role="status" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400">
+          {absentCount} spelare nedan kommer inte längre.
         </p>
       )}
 
       {newPlayers.length > 0 && (
         <div className="space-y-3 rounded-xl border-2 border-accent p-4">
           <h2 className="font-semibold">
-            {newPlayers.length} new {newPlayers.length === 1 ? "player" : "players"} without a place
+            {newPlayers.length} {newPlayers.length === 1 ? "ny" : "nya"} spelare utan plats
           </h2>
           <ul className="flex flex-wrap gap-2">
             {newPlayers.map((player) => (
@@ -143,17 +143,17 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           </ul>
           <div className="flex flex-wrap gap-2">
             {newToGroups.length > 0 && (
-              <SpreadButton workoutId={id} kind="level" label={`Spread ${newToGroups.length} across groups`} />
+              <SpreadButton workoutId={id} kind="level" label={`Fördela ${newToGroups.length} på grupperna`} />
             )}
             {newToTeams.length > 0 && (
-              <SpreadButton workoutId={id} kind="team" label={`Spread ${newToTeams.length} across teams`} />
+              <SpreadButton workoutId={id} kind="team" label={`Fördela ${newToTeams.length} på lagen`} />
             )}
           </div>
         </div>
       )}
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Leveled groups</h2>
+        <h2 className="text-lg font-semibold">Nivågrupper</h2>
         <LevelGroupsForm
           workoutId={id}
           playerCount={players.length}
@@ -179,7 +179,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
                   >
                     {direction ? (
                       <span className="shrink-0 text-xs font-semibold text-accent">
-                        {direction === "up" ? "↑" : "↓"} from {member.levelCode}
+                        {direction === "up" ? "↑" : "↓"} från {member.levelCode}
                       </span>
                     ) : (
                       <span className="shrink-0 text-xs text-muted">{member.levelCode ?? "–"}</span>
@@ -193,7 +193,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Teams</h2>
+        <h2 className="text-lg font-semibold">Lag</h2>
         <TeamsForm
           workoutId={id}
           playerCount={players.length}
@@ -204,7 +204,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           {teams.map((team) => (
             <GroupCard
               key={team.id}
-              title={team.league ? `League ${team.league} · ${team.name}` : team.name}
+              title={team.league ? `Serie ${team.league} · ${team.name}` : team.name}
               count={countLabel(team.members)}
             >
               {team.members.map((member) => (
@@ -251,8 +251,8 @@ function MemberRow({
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate">{name}</span>
         {addedLate && (
-          <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-bold uppercase text-white">
-            New
+          <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-bold uppercase text-on-accent">
+            Ny
           </span>
         )}
       </span>

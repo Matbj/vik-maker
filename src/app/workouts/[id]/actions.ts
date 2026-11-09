@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { UserError } from "@/lib/errors";
 import { proposeLevelGroups, proposeSpread, proposeTeams } from "@/lib/grouping/claude-groups";
 import { loadGroupingPreferences } from "@/lib/grouping/preferences";
 import {
@@ -62,13 +63,13 @@ async function loadWorkout(workoutId: string) {
     .select()
     .from(schema.workouts)
     .where(eq(schema.workouts.id, workoutId));
-  if (!workout) throw new Error("This workout no longer exists.");
+  if (!workout) throw new UserError("Den här träningen finns inte längre.");
   return workout;
 }
 
-function errorMessage(error: unknown) {
+function errorMessage(error: unknown, fallback = "Något gick fel. Försök igen.") {
   console.error(error);
-  return { error: error instanceof Error ? error.message : "Something went wrong." };
+  return { error: error instanceof UserError ? error.message : fallback };
 }
 
 export async function createLevelGroups(
@@ -76,7 +77,7 @@ export async function createLevelGroups(
   formData: FormData,
 ): Promise<GroupingState> {
   const form = levelGroupsForm.safeParse(Object.fromEntries(formData));
-  if (!form.success) return { error: "Choose between 1 and 12 groups." };
+  if (!form.success) return { error: "Välj mellan 1 och 12 grupper." };
   const { workoutId, groupCount } = form.data;
 
   try {
@@ -84,7 +85,7 @@ export async function createLevelGroups(
     const levelOrder = await loadLevelOrder();
     const { players } = await loadWorkoutPlayers(workoutId, levelOrder);
     if (players.length < groupCount) {
-      return { error: `There are only ${players.length} players for ${groupCount} groups.` };
+      return { error: `Det finns bara ${players.length} spelare till ${groupCount} ${groupCount === 1 ? "grupp" : "grupper"}.` };
     }
 
     const proposal = await proposeLevelGroups(
@@ -109,7 +110,7 @@ export async function refreshAttendance(
   formData: FormData,
 ): Promise<GroupingState> {
   const workoutId = z.uuid().safeParse(formData.get("workoutId"));
-  if (!workoutId.success) return { error: "This workout no longer exists." };
+  if (!workoutId.success) return { error: "Den här träningen finns inte längre." };
 
   try {
     const workout = await loadWorkout(workoutId.data);
@@ -117,7 +118,7 @@ export async function refreshAttendance(
     revalidatePath(`/workouts/${workout.id}`);
     return {};
   } catch (error) {
-    return errorMessage(error);
+    return errorMessage(error, "Närvaron kunde inte hämtas från svenskalag.se. Försök igen om en liten stund.");
   }
 }
 
@@ -128,7 +129,7 @@ export async function spreadNewPlayers(
   formData: FormData,
 ): Promise<GroupingState> {
   const form = spreadForm.safeParse(Object.fromEntries(formData));
-  if (!form.success) return { error: "This workout no longer exists." };
+  if (!form.success) return { error: "Den här träningen finns inte längre." };
   const { workoutId, kind } = form.data;
 
   try {
@@ -140,7 +141,7 @@ export async function spreadNewPlayers(
       .select()
       .from(schema.workoutGroups)
       .where(and(eq(schema.workoutGroups.workoutId, workoutId), eq(schema.workoutGroups.kind, kind)));
-    if (groups.length === 0) return { error: "Create the groups or teams first." };
+    if (groups.length === 0) return { error: "Skapa grupperna eller lagen först." };
 
     const members = await db
       .select({
@@ -197,7 +198,7 @@ export async function createTeams(
   formData: FormData,
 ): Promise<GroupingState> {
   const form = teamsForm.safeParse(Object.fromEntries(formData));
-  if (!form.success) return { error: "Choose between 1 and 16 teams." };
+  if (!form.success) return { error: "Välj mellan 1 och 16 lag." };
   const { workoutId, teamCount, twoLeagues } = form.data;
 
   try {
@@ -205,7 +206,7 @@ export async function createTeams(
     const levelOrder = await loadLevelOrder();
     const { players } = await loadWorkoutPlayers(workoutId, levelOrder);
     if (players.length < teamCount) {
-      return { error: `There are only ${players.length} players for ${teamCount} teams.` };
+      return { error: `Det finns bara ${players.length} spelare till ${teamCount} lag.` };
     }
 
     const teams = await proposeTeams(
@@ -218,7 +219,7 @@ export async function createTeams(
     await replaceGroups(
       workoutId,
       "team",
-      teams.map((team, i) => ({ ...team, name: `Team ${i + 1}`, levelCodes: [] })),
+      teams.map((team, i) => ({ ...team, name: `Lag ${i + 1}`, levelCodes: [] })),
     );
     return {};
   } catch (error) {

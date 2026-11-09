@@ -19,5 +19,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // The cron route has its own bearer token.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/cron/).*)"],
+  matcher: ["/((?!_next/static|_next/image|icon.png|apple-icon.png|api/cron/).*)"],
 };

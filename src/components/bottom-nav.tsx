@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/", label: "Workouts" },
-  { href: "/players", label: "Players" },
-  { href: "/settings", label: "Settings" },
+  { href: "/", label: "Träningar" },
+  { href: "/players", label: "Spelare" },
+  { href: "/settings", label: "Inställningar" },
 ] as const;
 
 /** Thumb-reachable tab bar on phones; sits at the bottom on all sizes for now. */
@@ -22,8 +22,8 @@ export function BottomNav() {
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
-                className={`flex h-14 items-center justify-center text-sm font-medium ${
-                  active ? "text-accent" : "text-muted"
+                className={`flex h-14 items-center justify-center border-t-2 text-sm font-medium ${
+                  active ? "border-gold text-accent" : "border-transparent text-muted"
                 }`}
                 aria-current={active ? "page" : undefined}
               >

@@ -12,8 +12,8 @@ import { AddSeparationForm, GroupingNotesForm } from "./settings-forms";
 export default function SettingsPage() {
   return (
     <section className="space-y-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
-      <Suspense fallback={<p className="text-sm text-muted">Loading settings…</p>}>
+      <h1 className="text-2xl font-semibold">Inställningar</h1>
+      <Suspense fallback={<p className="text-sm text-muted">Laddar inställningar…</p>}>
         <Settings />
       </Suspense>
     </section>
@@ -24,7 +24,7 @@ async function Settings() {
   await connection();
 
   if (!env.DATABASE_URL) {
-    return <Notice title="Database not configured">Add <code>DATABASE_URL</code> to <code>.env.local</code>.</Notice>;
+    return <Notice title="Databasen är inte konfigurerad">Lägg till <code>DATABASE_URL</code> i <code>.env.local</code>.</Notice>;
   }
 
   const db = getDb();
@@ -54,8 +54,8 @@ async function Settings() {
     <div className="space-y-8">
       <div className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold">Keep apart</h2>
-          <p className="text-sm text-muted">We try hard to keep these players in different groups and teams, but it isn&apos;t guaranteed if there&apos;s no reasonable way to do it.</p>
+          <h2 className="text-lg font-semibold">Håll isär</h2>
+          <p className="text-sm text-muted">Vi gör vårt bästa för att hålla de här spelarna i olika grupper och lag, men det kan inte garanteras om det inte finns något rimligt sätt att göra det.</p>
         </div>
         <AddSeparationForm players={players} />
         {pairs.length > 0 && (
@@ -63,13 +63,13 @@ async function Settings() {
             {pairs.map((pair) => (
               <li key={`${pair.playerAId}-${pair.playerBId}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
                 <span className="min-w-0">
-                  {pair.nameA} <span className="text-muted">and</span> {pair.nameB}
+                  {pair.nameA} <span className="text-muted">och</span> {pair.nameB}
                 </span>
                 <form action={removeSeparation}>
                   <input type="hidden" name="playerAId" value={pair.playerAId} />
                   <input type="hidden" name="playerBId" value={pair.playerBId} />
                   <button type="submit" className="text-sm font-medium text-red-600 dark:text-red-400">
-                    Remove
+                    Ta bort
                   </button>
                 </form>
               </li>
@@ -80,11 +80,10 @@ async function Settings() {
 
       <div className="space-y-3">
         <div>
-          <h2 className="text-lg font-semibold">Notes for grouping</h2>
+          <h2 className="text-lg font-semibold">Anteckningar för gruppindelning</h2>
           <p className="text-sm text-muted">
-            These notes are followed when creating groups and teams. Please don&apos;t write
-            children&apos;s names here, use Keep apart for that, because the notes are shared as
-            written with an external AI service.
+            Anteckningarna följs när grupper och lag skapas. Skriv inga barns namn här, använd
+            Håll isär till det, eftersom anteckningarna delas ordagrant med en extern AI-tjänst.
           </p>
         </div>
         <GroupingNotesForm initialNotes={notes} />

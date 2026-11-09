@@ -1,4 +1,4 @@
-# Vik Maker
+# VIK Playmaker
 
 A mobile-first support tool for the team's coaches. It reads booked workouts from
 [svenskalag.se](https://www.svenskalag.se) and builds leveled training groups from the
