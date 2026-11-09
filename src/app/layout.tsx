@@ -5,6 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import crest from "@/assets/vik-crest.png";
 import { BottomNav } from "@/components/bottom-nav";
 import { PageTitle } from "@/components/page-title";
+import { SettingsLink } from "@/components/settings-link";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -41,6 +42,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Image src={crest} alt="Vendelsö IK:s klubbmärke" height={40} loading="eager" />
             <Suspense>
               <PageTitle />
+            </Suspense>
+            <Suspense>
+              <SettingsLink />
             </Suspense>
           </div>
         </header>
