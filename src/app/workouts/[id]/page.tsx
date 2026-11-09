@@ -13,6 +13,9 @@ import {
 } from "@/lib/grouping/workout-players";
 import { LevelGroupsForm, TeamsForm } from "./grouping-forms";
 
+const DEFAULT_PLAYERS_PER_GROUP = 8;
+const DEFAULT_PLAYERS_PER_TEAM = 7;
+
 // Claude can take a while to compute leveled groups.
 export const maxDuration = 180;
 
@@ -102,7 +105,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         <LevelGroupsForm
           workoutId={id}
           playerCount={players.length}
-          initialCount={levelGroups.length || 4}
+          initialCount={levelGroups.length || Math.round(players.length / DEFAULT_PLAYERS_PER_GROUP)}
           hasGroups={levelGroups.length > 0}
         />
         <div className="grid gap-3 sm:grid-cols-2">
@@ -131,7 +134,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         <TeamsForm
           workoutId={id}
           playerCount={players.length}
-          initialCount={teams.length || 4}
+          initialCount={teams.length || Math.round(players.length / DEFAULT_PLAYERS_PER_TEAM)}
           hasTeams={teams.length > 0}
         />
         <div className="grid gap-3 sm:grid-cols-2">
