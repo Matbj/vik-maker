@@ -1,0 +1,3 @@
+{
+  "crons": [{ "path": "/api/cron/sync-svenskalag", "schedule": "0 14 * * *" }]
+}
