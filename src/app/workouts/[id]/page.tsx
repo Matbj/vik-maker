@@ -124,8 +124,8 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
       </header>
 
       {absentCount > 0 && (
-        <p role="status" className="rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white">
-          {absentCount} spelare i grupperna eller lagen nedan kommer inte längre.
+        <p role="status" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400">
+          {absentCount} spelare nedan kommer inte längre.
         </p>
       )}
 
