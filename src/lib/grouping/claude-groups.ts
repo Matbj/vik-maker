@@ -46,6 +46,8 @@ If twoLeagues is true, split the teams into league 1 and league 2: league 1 gets
 
 Each player's history is newest first.`;
 
+const KEEP_GROUPS_PROMPT = `"currentGroups" lists the leveled groups the coaches have already made for this workout, strongest first. The coaches want the teams to stay as close to those groups as possible, so move as few players away from their groupmates as you can. With as many teams as groups, make each team one group. With more teams than groups, split each group into teams and keep those teams even with each other. With fewer teams than groups, combine neighbouring groups. With two leagues, the stronger groups go in league 1. Only move a player when the rules on team count, team sizes and leagues require it, or to honour "keepApart". Staying close to the groups comes before evening out strength between teams from different groups, and before "recentTeams". Players who aren't in any group can go on any team.`;
+
 const SYSTEM_PROMPT = `You split the youth football players at one training session into leveled groups for their coaches. Each player has a home level set by the coaches. Levels are listed strongest first.
 
 Group players so everyone in a group is of similar level. Group sizes should differ by at most one. When a merged or crowded group ends up too big, even the sizes out with a chain of one-level moves through the neighbouring groups rather than leaving them uneven: with groups A + B1, B2 and C of 8, 6 and 5 players, move one B1 player down to the B2 group and one B2 player down to the C group, giving 7, 6 and 6. Choose the players who are most due for that move. Use exactly the requested number of groups, ordered strongest first, and give each group the adjacent levels it plays at. When there are fewer groups than levels, merge adjacent levels. When there are more groups than levels, split a level across groups.
@@ -161,18 +163,25 @@ export async function proposeLevelGroups(
   }));
 }
 
-/** Asks Claude for even teams, optionally split into two leagues by level. */
+/**
+ * Asks Claude for even teams, optionally split into two leagues by level.
+ * With currentGroups, the teams stay as close to those groups as possible.
+ */
 export async function proposeTeams(
   players: PlayerWithHistory[],
   levelOrder: string[],
   options: { teamCount: number; twoLeagues: boolean },
   recentTeams: string[][][],
+  currentGroups: string[][],
   preferences: Preferences,
 ): Promise<ProposedTeam[]> {
   const aliases = new Map(players.map((p, i) => [p.id, `p${i + 1}`]));
   const realIds = new Map([...aliases].map(([real, alias]) => [alias, real]));
   const anonymous = players.map((p) => ({ ...p, id: aliases.get(p.id)! }));
   const keepApart = anonymousPairs(preferences.keepApart, aliases);
+  const groupsToKeep = currentGroups
+    .map((group) => group.flatMap((id) => aliases.get(id) ?? []))
+    .filter((group) => group.length > 0);
   const input = JSON.stringify({
     ...options,
     levelsStrongestFirst: levelOrder,
@@ -180,12 +189,13 @@ export async function proposeTeams(
     recentTeams: recentTeams.map((teams) =>
       teams.map((team) => team.flatMap((id) => aliases.get(id) ?? [])),
     ),
+    ...(groupsToKeep.length > 0 && { currentGroups: groupsToKeep }),
     keepApart,
     coachNotes: preferences.notes,
   });
 
   const { teams } = await askClaude(
-    `${TEAMS_PROMPT}\n\n${PREFERENCES_PROMPT}`,
+    [TEAMS_PROMPT, ...(groupsToKeep.length > 0 ? [KEEP_GROUPS_PROMPT] : []), PREFERENCES_PROMPT].join("\n\n"),
     input,
     teamsSchema,
     ({ teams: proposed }) => findTeamProblems(proposed, anonymous, options),
