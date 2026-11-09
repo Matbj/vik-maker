@@ -1,0 +1,1 @@
+ALTER TABLE "workout_group_members" ADD COLUMN "added_late" boolean DEFAULT false NOT NULL;

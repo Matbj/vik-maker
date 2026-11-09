@@ -65,6 +65,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         id: schema.players.id,
         name: schema.players.name,
         levelCode: schema.levels.code,
+        addedLate: schema.workoutGroupMembers.addedLate,
       })
       .from(schema.workoutGroupMembers)
       .innerJoin(schema.workoutGroups, eq(schema.workoutGroups.id, schema.workoutGroupMembers.groupId))
@@ -161,15 +162,27 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         />
         <div className="grid gap-3 sm:grid-cols-2">
           {levelGroups.map((group) => (
-            <GroupCard key={group.id} title={group.name} count={countLabel(group.members)}>
+            <GroupCard
+              key={group.id}
+              title={group.name}
+              subtitle={levelLabel(group.levelCodes, group.name)}
+              count={countLabel(group.members)}
+            >
               {group.members.map((member) => {
                 const { direction } = levelMove(member.levelCode, group.levelCodes, levelOrder);
                 return (
-                  <MemberRow key={member.id} name={member.name} absence={absenceOf(member.id)}>
-                    {direction && (
+                  <MemberRow
+                    key={member.id}
+                    name={member.name}
+                    absence={absenceOf(member.id)}
+                    addedLate={member.addedLate}
+                  >
+                    {direction ? (
                       <span className="shrink-0 text-xs font-semibold text-accent">
                         {direction === "up" ? "↑" : "↓"} from {member.levelCode}
                       </span>
+                    ) : (
+                      <span className="shrink-0 text-xs text-muted">{member.levelCode ?? "–"}</span>
                     )}
                   </MemberRow>
                 );
@@ -195,7 +208,12 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
               count={countLabel(team.members)}
             >
               {team.members.map((member) => (
-                <MemberRow key={member.id} name={member.name} absence={absenceOf(member.id)}>
+                <MemberRow
+                  key={member.id}
+                  name={member.name}
+                  absence={absenceOf(member.id)}
+                  addedLate={member.addedLate}
+                >
                   <span className="shrink-0 text-xs text-muted">{member.levelCode ?? "–"}</span>
                 </MemberRow>
               ))}
@@ -210,10 +228,12 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
 function MemberRow({
   name,
   absence,
+  addedLate,
   children,
 }: {
   name: string;
   absence: string | null;
+  addedLate: boolean;
   children: React.ReactNode;
 }) {
   if (absence) {
@@ -228,25 +248,43 @@ function MemberRow({
   }
   return (
     <li className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
-      <span className="truncate">{name}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate">{name}</span>
+        {addedLate && (
+          <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-bold uppercase text-white">
+            New
+          </span>
+        )}
+      </span>
       {children}
     </li>
   );
 }
 
+/** Older groups are named after their levels, so don't repeat those. */
+function levelLabel(levelCodes: string[], name: string) {
+  const label = levelCodes.join(" + ");
+  return label === name ? undefined : label;
+}
+
 function GroupCard({
   title,
+  subtitle,
   count,
   children,
 }: {
   title: string;
+  subtitle?: string;
   count: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-black/10 dark:border-white/10">
       <div className="flex items-center justify-between border-b border-black/10 px-3 py-2 dark:border-white/10">
-        <h3 className="font-semibold">{title}</h3>
+        <div className="min-w-0">
+          <h3 className="truncate font-semibold">{title}</h3>
+          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+        </div>
         <span className="text-xs text-muted">{count}</span>
       </div>
       <ul className="py-1">{children}</ul>

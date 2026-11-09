@@ -153,9 +153,33 @@ export const workoutGroupMembers = pgTable(
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
+    /** Spread into the group after it was created, because they turned up late. */
+    addedLate: boolean("added_late").notNull().default(false),
   },
   (t) => [primaryKey({ columns: [t.groupId, t.playerId] })],
 );
+
+/** Two players the coaches don't want in the same group or team. Stored with the lower id first. */
+export const playerSeparations = pgTable(
+  "player_separations",
+  {
+    playerAId: uuid("player_a_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    playerBId: uuid("player_b_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    ...timestamps,
+  },
+  (t) => [primaryKey({ columns: [t.playerAId, t.playerBId] })],
+);
+
+/** Free-form settings the coaches can change, such as notes for the grouping. */
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  ...timestamps,
+});
 
 export type Level = typeof levels.$inferSelect;
 export type Player = typeof players.$inferSelect;

@@ -5,26 +5,49 @@ import { z } from "zod";
 import { requireEnv } from "@/lib/env";
 import {
   findGroupingProblems,
+  findSizeProblems,
+  findSeparationProblems,
   findSpreadProblems,
+  findSpreadSeparationProblems,
   type LevelGroupProposal,
+  type PlayerPair,
   type SpreadGroup,
   type SpreadPlacement,
 } from "./level-groups";
+import { findLeagueMixProblems, findTeamProblems, type ProposedTeam } from "./teams";
 import type { PlayerWithHistory } from "./workout-players";
 
-const ATTEMPTS = 2;
+const ATTEMPTS = 3;
 
 const proposalSchema = z.object({
-  groups: z.array(z.object({ levelCodes: z.array(z.string()), playerIds: z.array(z.string()) })),
+  groups: z.array(
+    z.object({ name: z.string(), levelCodes: z.array(z.string()), playerIds: z.array(z.string()) }),
+  ),
 });
 
 const spreadSchema = z.object({
   placements: z.array(z.object({ playerId: z.string(), groupId: z.string() })),
 });
 
+const teamsSchema = z.object({
+  teams: z.array(z.object({ league: z.number().nullable(), playerIds: z.array(z.string()) })),
+});
+
+const PREFERENCES_PROMPT = `"keepApart" lists pairs of players the coaches would very much rather not have together. Avoid putting both in the same group or team, and only do it when there is really no reasonable way around it. "coachNotes" holds the coaches' own guidance; follow it wherever it doesn't break the rules above.`;
+
+const TEAMS_PROMPT = `You split the youth football players at one training session into teams for small games, for their coaches. Each player has a home level set by the coaches, and levels are listed strongest first.
+
+Use exactly teamCount teams, put every player on exactly one team, and make team sizes differ by at most one. Make the teams even in strength by giving each team a similar mix of home levels, so the games are close.
+
+If twoLeagues is true, split the teams into league 1 and league 2: league 1 gets the stronger players and half of the teams, rounded up, and league 2 gets the rest. Set "league" to 1 or 2 on every team. Teams within a league should be even with each other, and a C player shouldn't share a league with A players. If twoLeagues is false, set "league" to null.
+
+"recentTeams" lists the teams from recent workouts, newest first. Avoid putting the same players together again when you can, so everyone gets to play with different teammates.
+
+Each player's history is newest first.`;
+
 const SYSTEM_PROMPT = `You split the youth football players at one training session into leveled groups for their coaches. Each player has a home level set by the coaches. Levels are listed strongest first.
 
-Group players so everyone in a group is of similar level, and keep the groups fairly even in size. Use exactly the requested number of groups, ordered strongest first, and give each group the adjacent levels it plays at. When there are fewer groups than levels, merge adjacent levels. When there are more groups than levels, split a level across groups.
+Group players so everyone in a group is of similar level. Group sizes should differ by at most one. When a merged or crowded group ends up too big, even the sizes out with a chain of one-level moves through the neighbouring groups rather than leaving them uneven: with groups A + B1, B2 and C of 8, 6 and 5 players, move one B1 player down to the B2 group and one B2 player down to the C group, giving 7, 6 and 6. Choose the players who are most due for that move. Use exactly the requested number of groups, ordered strongest first, and give each group the adjacent levels it plays at. When there are fewer groups than levels, merge adjacent levels. When there are more groups than levels, split a level across groups.
 
 Don't simply copy the home levels: rotate some players so the groups stay fresh and fair, usually a small minority of each level.
 - A player who has trained regularly and stayed at their home level for the last several workouts should be more likely to spend this workout one level up, for example a B1 player trying A.
@@ -32,6 +55,8 @@ Don't simply copy the home levels: rotate some players so the groups stay fresh 
 - Avoid moving the same player in consecutive workouts when others are due.
 
 Hard rule: a player may never play more than one level away from their home level. A player with no home level can go in any group.
+
+Name each group after a god from Greek or Norse mythology, using the common Swedish spelling. The name must start with the letter of the group's strongest level, so an A group could be Athena, Apollon or Asa-Tor, a B group Balder, Brage or Boreas, and a C group Chronos, Chaos or Circe. A group playing B1 + B2 starts with B. If no god fits, use another figure from those myths. Every name must be different, and vary the names from one time to the next.
 
 Each player's history is newest first. "attended" says if they trained, and "played" is the levels of the group they were in, or null if no groups were made that day. Every player must be placed exactly once, using their given id.`;
 
@@ -45,12 +70,16 @@ Teams have no levels. Keep every team even in both size and strength, comparing 
 
 Each player's history is newest first. Every new player must be placed exactly once, using the given ids.`;
 
-/** Calls Claude until an answer passes the rules in code. */
+/**
+ * Calls Claude until an answer passes the rules in code. Preferences get the same
+ * retries, but the last answer is accepted if it only misses those.
+ */
 async function askClaude<T>(
   system: string,
   input: string,
   schema: z.ZodType<T>,
   findProblems: (answer: T) => string[],
+  findPreferenceProblems: (answer: T) => string[] = () => [],
 ): Promise<T> {
   const client = new Anthropic({ apiKey: requireEnv("CLAUDE_API_KEY") });
 
@@ -66,15 +95,30 @@ async function askClaude<T>(
     });
 
     if (response.stop_reason === "refusal" || !response.parsed_output) {
-      throw new Error("Claude didn't return a usable answer. Please try again.");
+      throw new Error("The result couldn't be used. Please try again.");
     }
 
-    const problems = findProblems(response.parsed_output);
-    if (problems.length === 0) return response.parsed_output;
+    const rules = findProblems(response.parsed_output);
+    const preferences = findPreferenceProblems(response.parsed_output);
+    if (rules.length === 0 && (preferences.length === 0 || attempt === ATTEMPTS - 1)) {
+      return response.parsed_output;
+    }
+    const problems = [...rules, ...preferences];
     feedback = `\n\nA previous attempt was rejected. Fix these problems:\n${problems.join("\n")}`;
   }
 
-  throw new Error("Claude's answer broke the rules twice. Please try again.");
+  throw new Error("The result kept breaking the rules. Please try again.");
+}
+
+type Preferences = { keepApart: PlayerPair[]; notes: string };
+
+/** Keeps only the pairs where both players are in this request, under their throwaway ids. */
+function anonymousPairs(pairs: PlayerPair[], aliases: Map<string, string>): PlayerPair[] {
+  return pairs.flatMap(([a, b]) => {
+    const aliasA = aliases.get(a);
+    const aliasB = aliases.get(b);
+    return aliasA && aliasB ? [[aliasA, aliasB] as PlayerPair] : [];
+  });
 }
 
 /**
@@ -85,22 +129,76 @@ export async function proposeLevelGroups(
   players: PlayerWithHistory[],
   levelOrder: string[],
   groupCount: number,
+  preferences: Preferences,
 ): Promise<LevelGroupProposal[]> {
-  const realIds = new Map(players.map((p, i) => [`p${i + 1}`, p.id]));
-  const anonymous = players.map((p, i) => ({ ...p, id: `p${i + 1}` }));
+  const aliases = new Map(players.map((p, i) => [p.id, `p${i + 1}`]));
+  const realIds = new Map([...aliases].map(([real, alias]) => [alias, real]));
+  const anonymous = players.map((p) => ({ ...p, id: aliases.get(p.id)! }));
+  const keepApart = anonymousPairs(preferences.keepApart, aliases);
   const input = JSON.stringify({
     groupCount,
     levelsStrongestFirst: levelOrder,
     players: anonymous.map(({ id, levelCode, history }) => ({ id, homeLevel: levelCode, history })),
+    keepApart,
+    coachNotes: preferences.notes,
   });
 
-  const { groups } = await askClaude(SYSTEM_PROMPT, input, proposalSchema, ({ groups: proposed }) =>
-    findGroupingProblems(proposed, anonymous, levelOrder, groupCount),
+  const { groups } = await askClaude(
+    `${SYSTEM_PROMPT}\n\n${PREFERENCES_PROMPT}`,
+    input,
+    proposalSchema,
+    ({ groups: proposed }) => findGroupingProblems(proposed, anonymous, levelOrder, groupCount),
+    ({ groups: proposed }) => [
+      ...findSeparationProblems(proposed, keepApart),
+      ...findSizeProblems(proposed),
+    ],
   );
   return groups.map((group) => ({
+    name: group.name.trim(),
     levelCodes: group.levelCodes,
     playerIds: group.playerIds.map((id) => realIds.get(id)!),
   }));
+}
+
+/** Asks Claude for even teams, optionally split into two leagues by level. */
+export async function proposeTeams(
+  players: PlayerWithHistory[],
+  levelOrder: string[],
+  options: { teamCount: number; twoLeagues: boolean },
+  recentTeams: string[][][],
+  preferences: Preferences,
+): Promise<ProposedTeam[]> {
+  const aliases = new Map(players.map((p, i) => [p.id, `p${i + 1}`]));
+  const realIds = new Map([...aliases].map(([real, alias]) => [alias, real]));
+  const anonymous = players.map((p) => ({ ...p, id: aliases.get(p.id)! }));
+  const keepApart = anonymousPairs(preferences.keepApart, aliases);
+  const input = JSON.stringify({
+    ...options,
+    levelsStrongestFirst: levelOrder,
+    players: anonymous.map(({ id, levelCode, history }) => ({ id, homeLevel: levelCode, history })),
+    recentTeams: recentTeams.map((teams) =>
+      teams.map((team) => team.flatMap((id) => aliases.get(id) ?? [])),
+    ),
+    keepApart,
+    coachNotes: preferences.notes,
+  });
+
+  const { teams } = await askClaude(
+    `${TEAMS_PROMPT}\n\n${PREFERENCES_PROMPT}`,
+    input,
+    teamsSchema,
+    ({ teams: proposed }) => findTeamProblems(proposed, anonymous, options),
+    ({ teams: proposed }) => [
+      ...findSeparationProblems(proposed, keepApart),
+      ...findLeagueMixProblems(proposed, anonymous, levelOrder),
+    ],
+  );
+  return teams
+    .map((team) => ({
+      league: options.twoLeagues ? team.league : null,
+      playerIds: team.playerIds.map((id) => realIds.get(id)!),
+    }))
+    .sort((a, b) => (a.league ?? 0) - (b.league ?? 0));
 }
 
 /** Asks Claude where new players should go in groups or teams that already exist. */
@@ -108,24 +206,41 @@ export async function proposeSpread(
   newPlayers: PlayerWithHistory[],
   groups: SpreadGroup[],
   levelOrder: string[],
+  preferences: Preferences,
 ): Promise<SpreadPlacement[]> {
-  const realPlayerIds = new Map(newPlayers.map((p, i) => [`p${i + 1}`, p.id]));
+  const aliases = new Map(newPlayers.map((p, i) => [p.id, `p${i + 1}`]));
+  groups
+    .flatMap((group) => group.members)
+    .forEach((member, i) => aliases.set(member.id, `m${i + 1}`));
+  const realPlayerIds = new Map([...aliases].map(([real, alias]) => [alias, real]));
   const realGroupIds = new Map(groups.map((g, i) => [`g${i + 1}`, g.id]));
-  const anonymousPlayers = newPlayers.map((p, i) => ({ ...p, id: `p${i + 1}` }));
-  const anonymousGroups = groups.map((g, i) => ({ ...g, id: `g${i + 1}` }));
+  const anonymousPlayers = newPlayers.map((p) => ({ ...p, id: aliases.get(p.id)! }));
+  const anonymousGroups = groups.map((g, i) => ({
+    ...g,
+    id: `g${i + 1}`,
+    members: g.members.map((m) => ({ ...m, id: aliases.get(m.id)! })),
+  }));
+  const keepApart = anonymousPairs(preferences.keepApart, aliases);
   const input = JSON.stringify({
     levelsStrongestFirst: levelOrder,
     groups: anonymousGroups.map(({ id, levelCodes, league, members }) => ({
       id,
       levels: levelCodes,
       league,
-      members: members.map((m) => ({ homeLevel: m.levelCode, absent: m.absent })),
+      members: members.map((m) => ({ id: m.id, homeLevel: m.levelCode, absent: m.absent })),
     })),
     newPlayers: anonymousPlayers.map(({ id, levelCode, history }) => ({ id, homeLevel: levelCode, history })),
+    keepApart,
+    coachNotes: preferences.notes,
   });
 
-  const { placements } = await askClaude(SPREAD_PROMPT, input, spreadSchema, ({ placements: proposed }) =>
-    findSpreadProblems(proposed, anonymousPlayers, anonymousGroups, levelOrder),
+  const { placements } = await askClaude(
+    `${SPREAD_PROMPT}\n\n${PREFERENCES_PROMPT}`,
+    input,
+    spreadSchema,
+    ({ placements: proposed }) =>
+      findSpreadProblems(proposed, anonymousPlayers, anonymousGroups, levelOrder),
+    ({ placements: proposed }) => findSpreadSeparationProblems(proposed, anonymousGroups, keepApart),
   );
   return placements.map(({ playerId, groupId }) => ({
     playerId: realPlayerIds.get(playerId)!,

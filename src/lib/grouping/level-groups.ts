@@ -1,6 +1,6 @@
 /** Rules for leveled groups. Pure functions, so they can check anything Claude proposes. */
 
-export type LevelGroupProposal = { levelCodes: string[]; playerIds: string[] };
+export type LevelGroupProposal = { name: string; levelCodes: string[]; playerIds: string[] };
 export type GroupingPlayer = { id: string; levelCode: string | null };
 
 /** How far a player's own level is from a group's levels, and in which direction. */
@@ -66,16 +66,65 @@ export function findGroupingProblems(
 
   const missing = players.filter((p) => !placed.has(p.id)).map((p) => p.id);
   if (missing.length > 0) problems.push(`Players not placed: ${missing.join(", ")}.`);
+
+  const names = groups.map((group) => group.name.trim().toLowerCase());
+  if (names.includes("") || new Set(names).size !== names.length) {
+    problems.push("Every group needs its own name.");
+  }
+  groups.forEach((group, i) => {
+    const letter = group.levelCodes[0]?.[0]?.toLowerCase();
+    if (letter && !names[i].startsWith(letter)) {
+      problems.push(`The name of group ${i + 1} must start with ${letter.toUpperCase()}.`);
+    }
+  });
   return problems;
+}
+
+/** Groups should be even, but level limits can make that impossible, so this is a preference. */
+export function findSizeProblems(groups: LevelGroupProposal[]): string[] {
+  const sizes = groups.map((group) => group.playerIds.length);
+  if (Math.max(...sizes) - Math.min(...sizes) <= 1) return [];
+  return [
+    `Group sizes are ${sizes.join(", ")} but should differ by at most one. Even them out with a chain of one-level moves between neighbouring groups, for example one player from a larger group down to the next group and one from that group down to the smaller one.`,
+  ];
+}
+
+export type PlayerPair = [string, string];
+
+/** Pairs the coaches would rather keep apart that ended up in the same group. */
+export function findSeparationProblems(groups: { playerIds: string[] }[], pairs: PlayerPair[]): string[] {
+  if (groups.length < 2) return [];
+  return pairs.flatMap(([a, b]) =>
+    groups.some((group) => group.playerIds.includes(a) && group.playerIds.includes(b))
+      ? [`Players ${a} and ${b} must not be in the same group.`]
+      : [],
+  );
 }
 
 export type SpreadGroup = {
   id: string;
   levelCodes: string[];
   league: number | null;
-  members: { levelCode: string | null; absent: boolean }[];
+  members: { id: string; levelCode: string | null; absent: boolean }[];
 };
 export type SpreadPlacement = { playerId: string; groupId: string };
+
+/** Keep-apart pairs that end up together once the new players are placed. */
+export function findSpreadSeparationProblems(
+  placements: SpreadPlacement[],
+  groups: SpreadGroup[],
+  keepApart: PlayerPair[],
+): string[] {
+  return findSeparationProblems(
+    groups.map((group) => ({
+      playerIds: [
+        ...group.members.filter((member) => !member.absent).map((member) => member.id),
+        ...placements.filter((p) => p.groupId === group.id).map((p) => p.playerId),
+      ],
+    })),
+    keepApart,
+  );
+}
 
 /** Everything wrong with where new players were put. Empty means it can be used. */
 export function findSpreadProblems(
@@ -123,16 +172,4 @@ export function findSpreadProblems(
     }
   }
   return problems;
-}
-
-/** "A", "B1 + B2", and a number when several groups share the same levels. */
-export function levelGroupNames(groups: { levelCodes: string[] }[]) {
-  const base = groups.map((g) => g.levelCodes.join(" + "));
-  const seen = new Map<string, number>();
-  return base.map((name) => {
-    if (base.filter((other) => other === name).length === 1) return name;
-    const number = (seen.get(name) ?? 0) + 1;
-    seen.set(name, number);
-    return `${name} (${number})`;
-  });
 }

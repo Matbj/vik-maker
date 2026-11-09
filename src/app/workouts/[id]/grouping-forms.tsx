@@ -191,7 +191,7 @@ export function TeamsForm({
           </label>
         )}
         <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Creating…" : hasTeams ? "Create new teams" : "Create teams"}
+          {pending ? "Thinking…" : hasTeams ? "Create new teams" : "Create teams"}
         </button>
       </div>
       <p className="text-sm text-muted">

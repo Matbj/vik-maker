@@ -1,0 +1,94 @@
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { alias } from "drizzle-orm/pg-core";
+import { asc, eq } from "drizzle-orm";
+import { getDb, schema } from "@/db";
+import { env } from "@/lib/env";
+import { Notice } from "@/components/notice";
+import { loadGroupingPreferences } from "@/lib/grouping/preferences";
+import { removeSeparation } from "./actions";
+import { AddSeparationForm, GroupingNotesForm } from "./settings-forms";
+
+export default function SettingsPage() {
+  return (
+    <section className="space-y-6">
+      <h1 className="text-2xl font-semibold">Settings</h1>
+      <Suspense fallback={<p className="text-sm text-muted">Loading settings…</p>}>
+        <Settings />
+      </Suspense>
+    </section>
+  );
+}
+
+async function Settings() {
+  await connection();
+
+  if (!env.DATABASE_URL) {
+    return <Notice title="Database not configured">Add <code>DATABASE_URL</code> to <code>.env.local</code>.</Notice>;
+  }
+
+  const db = getDb();
+  const playerA = alias(schema.players, "player_a");
+  const playerB = alias(schema.players, "player_b");
+  const [players, pairs, { notes }] = await Promise.all([
+    db
+      .select({ id: schema.players.id, name: schema.players.name })
+      .from(schema.players)
+      .where(eq(schema.players.active, true))
+      .orderBy(asc(schema.players.name)),
+    db
+      .select({
+        playerAId: schema.playerSeparations.playerAId,
+        playerBId: schema.playerSeparations.playerBId,
+        nameA: playerA.name,
+        nameB: playerB.name,
+      })
+      .from(schema.playerSeparations)
+      .innerJoin(playerA, eq(playerA.id, schema.playerSeparations.playerAId))
+      .innerJoin(playerB, eq(playerB.id, schema.playerSeparations.playerBId))
+      .orderBy(asc(playerA.name), asc(playerB.name)),
+    loadGroupingPreferences(),
+  ]);
+
+  return (
+    <div className="space-y-8">
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Keep apart</h2>
+          <p className="text-sm text-muted">We try hard to keep these players in different groups and teams, but it isn&apos;t guaranteed if there&apos;s no reasonable way to do it.</p>
+        </div>
+        <AddSeparationForm players={players} />
+        {pairs.length > 0 && (
+          <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+            {pairs.map((pair) => (
+              <li key={`${pair.playerAId}-${pair.playerBId}`} className="flex items-center justify-between gap-3 px-4 py-2 text-sm">
+                <span className="min-w-0">
+                  {pair.nameA} <span className="text-muted">and</span> {pair.nameB}
+                </span>
+                <form action={removeSeparation}>
+                  <input type="hidden" name="playerAId" value={pair.playerAId} />
+                  <input type="hidden" name="playerBId" value={pair.playerBId} />
+                  <button type="submit" className="text-sm font-medium text-red-600 dark:text-red-400">
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Notes for grouping</h2>
+          <p className="text-sm text-muted">
+            These notes are followed when creating groups and teams. Please don&apos;t write
+            children&apos;s names here, use Keep apart for that, because the notes are shared as
+            written with an external AI service.
+          </p>
+        </div>
+        <GroupingNotesForm initialNotes={notes} />
+      </div>
+    </div>
+  );
+}

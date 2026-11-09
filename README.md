@@ -69,9 +69,12 @@ On a workout's page, coaches create groups by hand, and they stay until replaced
 - **Leveled groups** are computed by Claude from each player's level and recent attendance and
   groups. It rotates some players up or down so groups don't go stale. Code checks the result:
   nobody ever moves more than one level. Players are sent as anonymous ids, never names.
-- **Teams** are built without AI: players are dealt out by level so teams are even, and every
-  player gets a spot, so team sizes differ by at most one. With 4 or more teams they can be
-  split into two leagues by level.
+- **Teams** are computed by Claude too, even in size and strength and varied from recent teams.
+  With 4 or more teams they can be split into two leagues by level.
+
+Under Settings, coaches list players to keep apart, which Claude avoids very strongly in groups,
+teams and spreading, and retries when it slips, and write notes that Claude follows. Notes are sent to Claude as written,
+so they shouldn't contain children's names.
 
 A workout's page can refresh its attendance on demand. Players who have stopped coming stay in
 their group or team, clearly marked. New players are listed separately, and Claude can spread
