@@ -116,7 +116,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           {coachAttendance.coaches.length}{" "}
           {coachAttendance.registered ? "coaches present" : "coaches attending"}
           {coachAttendance.coaches.length > 0 &&
-            `: ${coachAttendance.coaches.map((coach) => coach.name).join(", ")}`}
+            `: ${coachAttendance.coaches.map((coach) => coach.name.split(" ")[0]).join(", ")}`}
         </p>
         <p className="mt-1 text-xs text-muted">Updated {whenFormat.format(workout.syncedAt)}</p>
       </header>
