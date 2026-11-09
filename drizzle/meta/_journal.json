@@ -15,6 +15,13 @@
       "when": 1794258171901,
       "tag": "0001_attendance_check_status",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794260571864,
+      "tag": "0002_big_terror",
+      "breakpoints": true
     }
   ]
 }

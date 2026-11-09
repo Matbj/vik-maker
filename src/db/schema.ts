@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -93,13 +94,20 @@ export const workoutAttendance = pgTable(
   (t) => [primaryKey({ columns: [t.workoutId, t.playerId] })],
 );
 
-/** A generated training group for one workout, e.g. "A" or "B1 + B2". */
+export const workoutGroupKind = pgEnum("workout_group_kind", ["level", "team"]);
+
+/** A generated group for one workout: a leveled group such as "B1 + B2", or a team. */
 export const workoutGroups = pgTable("workout_groups", {
   id: uuid("id").primaryKey().defaultRandom(),
   workoutId: uuid("workout_id")
     .notNull()
     .references(() => workouts.id, { onDelete: "cascade" }),
+  kind: workoutGroupKind("kind").notNull().default("level"),
   name: text("name").notNull(),
+  /** The levels a leveled group plays at, strongest first. Empty for teams. */
+  levelCodes: text("level_codes").array().notNull().default(sql`'{}'::text[]`),
+  /** 1 or 2 when the teams are split into two leagues. */
+  league: integer("league"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 });

@@ -47,7 +47,7 @@ src/
   db/schema.ts            levels, players, workouts, attendance, workout groups
   db/index.ts             lazy Neon/Drizzle client (server-only)
   lib/env.ts              validated server env
-  lib/grouping/           pure group-building logic
+  lib/grouping/           AI leveled groups, team building and their rules
   lib/svenskalag/         svenskalag.se client, page parsers and sync
 drizzle/                  SQL migrations
 scripts/seed.ts           seeds levels
@@ -59,7 +59,18 @@ scripts/seed.ts           seeds levels
 - **players**: name, svenskalag id, level
 - **workouts**: synced from svenskalag.se, keyed on svenskalag's id
 - **workout_attendance**: per workout and player, `player_response` (what the player answered) and `coach_check` (the coaches' attendance check, empty until registered)
-- **workout_groups** + **workout_group_members**: the generated groups for a workout
+- **workout_groups** + **workout_group_members**: the generated leveled groups and teams for a workout, kept until a coach creates new ones
+
+## Groups and teams
+
+On a workout's page, coaches create groups by hand, and they stay until replaced.
+
+- **Leveled groups** are computed by Claude from each player's level and recent attendance and
+  groups. It rotates some players up or down so groups don't go stale. Code checks the result:
+  nobody ever moves more than one level. Players are sent as anonymous ids, never names.
+- **Teams** are built without AI: players are dealt out by level so teams are even, and any
+  players beyond the requested size are listed as reserves. With 4 or more teams they can be
+  split into two leagues by level.
 
 ## svenskalag.se integration
 
