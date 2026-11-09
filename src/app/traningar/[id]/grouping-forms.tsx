@@ -78,6 +78,13 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
   );
 }
 
+/** A form's onSubmit that asks before anything existing gets replaced. */
+function confirmReplacing(replacing: boolean, question: string) {
+  return (event: React.FormEvent<HTMLFormElement>) => {
+    if (replacing && !window.confirm(question)) event.preventDefault();
+  };
+}
+
 /** The current groups or teams, blurred from when new ones are requested until they arrive. */
 function ReplaceableCards({
   replacing,
@@ -169,7 +176,11 @@ export function LevelGroupsForm({
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 12);
   return (
     <>
-      <form action={action} className="space-y-2">
+      <form
+        action={action}
+        onSubmit={confirmReplacing(hasGroups, "Vill du ersätta de nuvarande grupperna med nya?")}
+        className="space-y-2"
+      >
         <input type="hidden" name="workoutId" value={workoutId} />
         <input type="hidden" name="groupCount" value={count} />
         <div className="flex flex-wrap items-center gap-3">
@@ -218,7 +229,11 @@ export function TeamsForm({
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 16);
   return (
     <>
-      <form action={action} className="space-y-2">
+      <form
+        action={action}
+        onSubmit={confirmReplacing(hasTeams, "Vill du ersätta de nuvarande lagen med nya?")}
+        className="space-y-2"
+      >
         <input type="hidden" name="workoutId" value={workoutId} />
         <input type="hidden" name="teamCount" value={count} />
         <div className="flex flex-wrap items-center gap-3">
