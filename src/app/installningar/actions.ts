@@ -23,7 +23,7 @@ export async function addSeparation(
     .insert(schema.playerSeparations)
     .values({ playerAId, playerBId })
     .onConflictDoNothing();
-  revalidatePath("/settings");
+  revalidatePath("/installningar");
   return {};
 }
 
@@ -41,7 +41,7 @@ export async function removeSeparation(formData: FormData) {
         eq(schema.playerSeparations.playerBId, form.data.playerBId),
       ),
     );
-  revalidatePath("/settings");
+  revalidatePath("/installningar");
 }
 
 export async function saveGroupingNotes(
@@ -58,6 +58,6 @@ export async function saveGroupingNotes(
       target: schema.appSettings.key,
       set: { value: sql`excluded.value`, updatedAt: new Date() },
     });
-  revalidatePath("/settings");
+  revalidatePath("/installningar");
   return { saved: true };
 }

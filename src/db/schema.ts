@@ -59,6 +59,10 @@ export const coaches = pgTable(
     svenskalagId: text("svenskalag_id").notNull(),
     /** Lower-case, from svenskalag.se's contact list. Null means the coach can't log in. */
     email: text("email"),
+    /** As written in svenskalag.se's contact list. Mobile if there is one, otherwise the other number. */
+    phone: text("phone"),
+    /** The coach's role in svenskalag.se's contact list, in Swedish, such as "Tränare". */
+    role: text("role"),
     ...timestamps,
   },
   (t) => [uniqueIndex("coaches_svenskalag_id_idx").on(t.svenskalagId)],

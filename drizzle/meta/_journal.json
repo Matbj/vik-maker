@@ -57,6 +57,20 @@
       "when": 1794266451316,
       "tag": "0007_swedish_team_names",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794267456974,
+      "tag": "0008_coach_phone",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794267757739,
+      "tag": "0009_coach_role",
+      "breakpoints": true
     }
   ]
 }

@@ -23,7 +23,6 @@ const timeFormat = new Intl.DateTimeFormat("sv-SE", {
 export default function WorkoutsPage() {
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Kommande träningar</h1>
       <Suspense fallback={<p className="text-sm text-muted">Laddar träningar…</p>}>
         <WorkoutLists />
       </Suspense>
@@ -103,7 +102,7 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
         const registered = w.present + w.absent > 0;
         return (
           <li key={w.id}>
-            <Link href={`/workouts/${w.id}`} className="flex items-center justify-between gap-4 px-4 py-3">
+            <Link href={`/traningar/${w.id}`} className="flex items-center justify-between gap-4 px-4 py-3">
             <div className="min-w-0">
               <p className="font-medium first-letter:uppercase">
                 {dateFormat.format(w.startsAt)}, {timeFormat.format(w.startsAt)}

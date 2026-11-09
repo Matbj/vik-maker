@@ -7,12 +7,12 @@ export async function proxy(request: NextRequest) {
   const loggedIn = token ? await isValidSession(token) : false;
   const { pathname, search } = request.nextUrl;
 
-  if (pathname === "/login") {
+  if (pathname === "/logga-in") {
     return loggedIn ? NextResponse.redirect(new URL("/", request.url)) : NextResponse.next();
   }
   if (loggedIn) return NextResponse.next();
 
-  const login = new URL("/login", request.url);
+  const login = new URL("/logga-in", request.url);
   if (pathname !== "/") login.searchParams.set("next", `${pathname}${search}`);
   return NextResponse.redirect(login);
 }

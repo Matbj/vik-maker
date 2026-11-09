@@ -54,33 +54,41 @@ export async function syncWorkouts(range: { from: Date; to: Date }) {
     attendanceRows += attendance.length;
   }
 
-  // After the attendance, so coaches seen for the first time get their email too.
-  const coachEmails = await syncCoachEmails(client);
+  // After the attendance, so coaches seen for the first time get their contact details too.
+  const coachContacts = await syncCoachContacts(client);
 
-  return { workouts: workouts.length, players: players.size, coaches: coaches.size, attendanceRows, coachEmails };
+  return { workouts: workouts.length, players: players.size, coaches: coaches.size, attendanceRows, coachContacts };
 }
 
 /**
- * Copies emails from svenskalag.se's contact list onto the coaches we know, matched by name.
- * Someone no longer listed as a coach loses their email, and with it the ability to log in.
+ * Copies emails, phone numbers and roles from svenskalag.se's contact list onto the coaches we know, matched by name.
+ * Someone no longer listed as a coach loses them all, and with the email the ability to log in.
  */
-export async function syncCoachEmails(client = new SvenskalagClient()) {
+export async function syncCoachContacts(client = new SvenskalagClient()) {
   const db = getDb();
   const { coaches } = schema;
   const contacts = await client.fetchCoachContacts();
-  const emails = new Map(contacts.map((c) => [normalizeName(c.name), c.email]));
+  const byName = new Map(contacts.map((c) => [normalizeName(c.name), c]));
 
-  const known = await db.select({ id: coaches.id, name: coaches.name, email: coaches.email }).from(coaches);
+  const known = await db
+    .select({ id: coaches.id, name: coaches.name, email: coaches.email, phone: coaches.phone, role: coaches.role })
+    .from(coaches);
   let updated = 0;
+  let withEmail = 0;
+  let withPhone = 0;
   for (const coach of known) {
-    const email = emails.get(normalizeName(coach.name)) ?? null;
-    if (email === coach.email) continue;
-    await db.update(coaches).set({ email }).where(eq(coaches.id, coach.id));
+    const contact = byName.get(normalizeName(coach.name));
+    const email = contact?.email ?? null;
+    const phone = contact?.phone ?? null;
+    const role = contact?.role ?? null;
+    if (email) withEmail++;
+    if (phone) withPhone++;
+    if (email === coach.email && phone === coach.phone && role === coach.role) continue;
+    await db.update(coaches).set({ email, phone, role }).where(eq(coaches.id, coach.id));
     updated++;
   }
 
-  const withEmail = known.filter((c) => emails.get(normalizeName(c.name))).length;
-  return { coaches: known.length, withEmail, updated, listedOnSvenskalag: contacts.length };
+  return { coaches: known.length, withEmail, withPhone, updated, listedOnSvenskalag: contacts.length };
 }
 
 function normalizeName(name: string) {

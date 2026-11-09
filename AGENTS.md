@@ -18,14 +18,14 @@ This file describes the app as it is now. When a change affects anything below (
 
 ## Language
 
-- All code is in English: identifiers, comments, database names, AI prompts, commit messages and docs.
-- Everything users see is in Swedish: page text, buttons, form and error messages that reach the UI (including those thrown in `src/lib/`), page metadata, the login email and `<html lang>`.
+- All code is in English: identifiers, comments, database names, AI prompts, commit messages and docs. Page routes are the exception, as their folder names are the addresses users see.
+- Everything users see is in Swedish: page addresses (without å, ä and ö), page text, buttons, form and error messages that reach the UI (including those thrown in `src/lib/`), page metadata, the login email and `<html lang>`.
 - Data keeps its own language, such as svenskalag.se titles and the group names.
 - Use the words coaches know from svenskalag.se and football: workout is "träning", coach is "ledare", team is "lag", league is "serie".
 
 ## Branding
 
-The app is called VIK Playmaker, for Vendelsö IK. Colors come from the club's crest, blue `#0053a1` and yellow `#ffd100`, and are defined as theme tokens in `src/app/globals.css`. Use `bg-accent` with `text-on-accent`, as the accent is blue in light mode and yellow in dark mode. The crest is `src/assets/vik-crest.png`, with `src/app/icon.png` and `src/app/apple-icon.png` as icons. `src/proxy.ts` must keep letting the icons through without a login.
+The app is called VIK Playmaker, for Vendelsö IK. Colors come from the club's crest, blue `#0053a1` and yellow `#ffd100`, and are defined as theme tokens in `src/app/globals.css`. Use `bg-accent` with `text-on-accent`, as the accent is blue in light mode and yellow in dark mode. The crest is `src/assets/vik-crest.png`, with `src/app/icon.png` and `src/app/apple-icon.png` as icons. `src/proxy.ts` must keep letting the icons through without a login. The header bar shows the crest on the left, the page's title in the middle and a settings icon on the right, set in `src/components/page-title.tsx`, so a new page needs its title there, and the app's name appears only in the browser tab.
 
 ## Standing rules
 
@@ -45,17 +45,17 @@ Next.js 16 (App Router, Cache Components), React 19, TypeScript, Tailwind CSS v4
 | Route | Purpose |
 | --- | --- |
 | `/` | Workouts |
-| `/workouts/[id]` | One workout: attendance, leveled groups, teams, spreading new players |
-| `/players` | Active players and their levels |
-| `/settings` | Keep-apart pairs and free-text grouping notes |
-| `/login` | Email code login for coaches |
+| `/traningar/[id]` | One workout: attendance, leveled groups, teams, spreading new players |
+| `/truppen` | The coaches with roles and phone numbers, then active players and their levels |
+| `/installningar` | Keep-apart pairs and free-text grouping notes |
+| `/logga-in` | Email code login for coaches |
 | `/api/cron/sync-svenskalag` | Daily sync at 14:00 UTC, protected by `CRON_SECRET` |
 
-`src/proxy.ts` requires a logged-in coach for every page and Server Action, except `/api/cron/`.
+`src/proxy.ts` requires a logged-in coach for every page and Server Action, except `/api/cron/`. `next.config.ts` redirects the old English addresses to these.
 
 ## How it works
 
-- **Sync** (`src/lib/svenskalag/`): logs in with a coach's own account and parses the pages, as there is no public API. It covers the last 14 days and the next 28, and a page that looks wrong fails the sync instead of overwriting data. It never changes a player's level or active flag. Coach emails come from the "Ledare" section of the contact list. Workouts removed from svenskalag.se aren't deleted here yet.
+- **Sync** (`src/lib/svenskalag/`): logs in with a coach's own account and parses the pages, as there is no public API. It covers the last 14 days and the next 28, and a page that looks wrong fails the sync instead of overwriting data. It never changes a player's level or active flag. Coach emails, phone numbers and roles come from the "Ledare" section of the contact list, and only coaches' numbers are stored. Workouts removed from svenskalag.se aren't deleted here yet.
 - **Attendance**: `player_response` is what the player answered, and `coach_check` is the coaches' own check, empty until registered. The check wins once it exists.
 - **Groups and teams** (`src/lib/grouping/`): the AI proposes them, and pure functions in `level-groups.ts` and `teams.ts` validate the answer, with up to three attempts. Nobody moves more than one level from their home level. Keep-apart pairs get the same retries, but the last answer is accepted if it only misses those. Groups are named after Greek or Norse gods, starting with the letter of the group's strongest level. When a workout has leveled groups, a checkbox on the team form asks the AI to keep the teams as close to those groups as possible, which then comes before even strength between teams from different groups.
 - **Persistence**: groups stay per workout and kind until a coach creates new ones. Players who stop coming stay in their group and are marked, and new players are listed separately so they can be spread into the existing groups.

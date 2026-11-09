@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { env } from "@/lib/env";
+import { LogoutButton } from "@/components/logout-button";
 import { Notice } from "@/components/notice";
 import { loadGroupingPreferences } from "@/lib/grouping/preferences";
 import { removeSeparation } from "./actions";
@@ -12,10 +13,10 @@ import { AddSeparationForm, GroupingNotesForm } from "./settings-forms";
 export default function SettingsPage() {
   return (
     <section className="space-y-6">
-      <h1 className="text-2xl font-semibold">Inställningar</h1>
       <Suspense fallback={<p className="text-sm text-muted">Laddar inställningar…</p>}>
         <Settings />
       </Suspense>
+      <LogoutButton />
     </section>
   );
 }

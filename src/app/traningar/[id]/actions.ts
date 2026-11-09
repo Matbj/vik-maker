@@ -57,7 +57,7 @@ async function replaceGroups(workoutId: string, kind: "level" | "team", groups: 
       .insert(schema.workoutGroupMembers)
       .values(rows.flatMap((row) => row.playerIds.map((playerId) => ({ groupId: row.id, playerId })))),
   ]);
-  revalidatePath(`/workouts/${workoutId}`);
+  revalidatePath(`/traningar/${workoutId}`);
 }
 
 async function loadWorkout(workoutId: string) {
@@ -117,7 +117,7 @@ export async function refreshAttendance(
   try {
     const workout = await loadWorkout(workoutId.data);
     await refreshWorkoutAttendance(workout.id, workout.svenskalagId);
-    revalidatePath(`/workouts/${workout.id}`);
+    revalidatePath(`/traningar/${workout.id}`);
     return {};
   } catch (error) {
     return errorMessage(error, "Närvaron kunde inte hämtas från svenskalag.se. Försök igen om en liten stund.");
@@ -188,7 +188,7 @@ export async function spreadNewPlayers(
       .insert(schema.workoutGroupMembers)
       .values(placements.map(({ groupId, playerId }) => ({ groupId, playerId, addedLate: true })))
       .onConflictDoNothing();
-    revalidatePath(`/workouts/${workoutId}`);
+    revalidatePath(`/traningar/${workoutId}`);
     return {};
   } catch (error) {
     return errorMessage(error);

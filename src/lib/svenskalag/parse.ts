@@ -35,7 +35,7 @@ export type ParsedResponse = {
   response: "attending" | "declined" | "unanswered";
 };
 
-export type ParsedCoachContact = { name: string; email: string | null };
+export type ParsedCoachContact = { name: string; email: string | null; phone: string | null; role: string | null };
 
 export type ParsedMember = { memberId: string; name: string; role: MemberRole };
 
@@ -146,7 +146,7 @@ function quoteObjectKeys(literal: string) {
 }
 
 /**
- * Coaches' names and emails from the contact list, which has no member ids.
+ * Coaches' names, roles, emails and phone numbers from the contact list, which has no member ids.
  * Reads only the "Ledare" section, so parents' contact details are never picked up.
  */
 export function parseCoachContacts(html: string): ParsedCoachContact[] {
@@ -165,7 +165,19 @@ export function parseCoachContacts(html: string): ParsedCoachContact[] {
       const name = row.match(/<td colspan="2">\s*<span>\s*([^<]+)/)?.[1];
       if (!name) return [];
       const email = row.match(/href="mailto:([^"]+)"/)?.[1];
-      return [{ name: decodeHtml(name).trim(), email: email ? decodeHtml(email).trim().toLowerCase() : null }];
+      // The mobile column comes first, and either number can be empty.
+      const phone = [...row.matchAll(/href="tel:[^"]*"[^>]*>([^<]*)</g)]
+        .map((link) => decodeHtml(link[1]).trim().replace(/\s*-\s*/, "-"))
+        .find(Boolean);
+      const role = row.match(/<i class="text-muted">([^<]*)</)?.[1];
+      return [
+        {
+          name: decodeHtml(name).trim(),
+          email: email ? decodeHtml(email).trim().toLowerCase() : null,
+          phone: phone ?? null,
+          role: role ? decodeHtml(role).trim() || null : null,
+        },
+      ];
     });
 
   if (contacts.length !== Number(heading[1])) {

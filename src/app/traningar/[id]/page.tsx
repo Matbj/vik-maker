@@ -28,7 +28,7 @@ const whenFormat = new Intl.DateTimeFormat("sv-SE", {
   minute: "2-digit",
 });
 
-export default function WorkoutPage({ params }: PageProps<"/workouts/[id]">) {
+export default function WorkoutPage({ params }: PageProps<"/traningar/[id]">) {
   return (
     <section className="space-y-6">
       <Link href="/" className="inline-block text-sm text-muted">
@@ -41,7 +41,7 @@ export default function WorkoutPage({ params }: PageProps<"/workouts/[id]">) {
   );
 }
 
-async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params"] }) {
+async function Workout({ params }: { params: PageProps<"/traningar/[id]">["params"] }) {
   await connection();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -103,13 +103,12 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
     <div className="space-y-8">
       <header>
         <div className="flex items-start justify-between gap-3">
-          <h1 className="min-w-0 text-2xl font-semibold">{workout.title}</h1>
+          <p className="min-w-0 text-sm text-muted">
+            <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
+            {workout.location && ` · ${workout.location}`}
+          </p>
           <RefreshAttendanceButton workoutId={id} />
         </div>
-        <p className="mt-3 text-sm text-muted">
-          <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
-          {workout.location && ` · ${workout.location}`}
-        </p>
         <p className="mt-4 text-sm text-muted">
           {players.length} {registered ? "spelare närvarande" : "spelare"} · {unanswered} inget svar
         </p>
