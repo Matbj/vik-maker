@@ -31,7 +31,7 @@ const whenFormat = new Intl.DateTimeFormat("sv-SE", {
 export default function WorkoutPage({ params }: PageProps<"/workouts/[id]">) {
   return (
     <section className="space-y-6">
-      <Link href="/" className="text-sm text-muted">
+      <Link href="/" className="inline-block text-sm text-muted">
         ← Träningar
       </Link>
       <Suspense fallback={<p className="text-sm text-muted">Laddar träningen…</p>}>
@@ -106,20 +106,20 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           <h1 className="min-w-0 text-2xl font-semibold">{workout.title}</h1>
           <RefreshAttendanceButton workoutId={id} />
         </div>
-        <p className="text-sm text-muted">
+        <p className="mt-3 text-sm text-muted">
           {whenFormat.format(workout.startsAt)}
           {workout.location && ` · ${workout.location}`}
         </p>
-        <p className="mt-1 text-sm text-muted">
+        <p className="mt-4 text-sm text-muted">
           {players.length} {registered ? "spelare närvarande" : "spelare kommer"}
         </p>
-        <p className="text-sm text-muted">
+        <p className="mt-1.5 text-sm text-muted">
           {coachAttendance.coaches.length}{" "}
           {coachAttendance.registered ? "ledare närvarande" : "ledare kommer"}
           {coachAttendance.coaches.length > 0 &&
             `: ${coachAttendance.coaches.map((coach) => coach.name.split(" ")[0]).join(", ")}`}
         </p>
-        <p className="mt-1 text-xs text-muted">Uppdaterad {whenFormat.format(workout.syncedAt)}</p>
+        <p className="mt-3 text-xs text-muted">Uppdaterad {whenFormat.format(workout.syncedAt)}</p>
       </header>
 
       {absentCount > 0 && (
