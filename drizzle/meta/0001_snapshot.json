@@ -1,5 +1,5 @@
 {
-  "id": "1b67fd6c-d22f-4293-84a0-032166a5128b",
+  "id": "316f86c7-e803-4f5a-b1cd-6fd8dcd6843f",
   "prevId": "44470687-e739-4f23-90d3-190a161e74e5",
   "version": "7",
   "dialect": "postgresql",
@@ -189,8 +189,7 @@
           "type": "attendance_check_status",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'unchecked'"
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -477,8 +476,7 @@
       "schema": "public",
       "values": [
         "present",
-        "absent",
-        "unchecked"
+        "absent"
       ]
     },
     "public.attendance_status": {
