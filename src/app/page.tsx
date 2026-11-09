@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { connection } from "next/server";
 import { asc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -101,7 +102,8 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
       {workouts.map((w) => {
         const registered = w.present + w.absent > 0;
         return (
-          <li key={w.id} className="flex items-center justify-between gap-4 px-4 py-3">
+          <li key={w.id}>
+            <Link href={`/workouts/${w.id}`} className="flex items-center justify-between gap-4 px-4 py-3">
             <div className="min-w-0">
               <p className="font-medium">
                 {dateFormat.format(w.startsAt)}, {timeFormat.format(w.startsAt)}
@@ -131,6 +133,7 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
                 </>
               )}
             </div>
+            </Link>
           </li>
         );
       })}

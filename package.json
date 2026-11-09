@@ -17,6 +17,7 @@
     "sync:svenskalag": "tsx --conditions=react-server scripts/sync-svenskalag.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.7.0",
     "@neondatabase/serverless": "^1.2.0",
     "drizzle-orm": "^0.45.4",
     "next": "16.4.5",

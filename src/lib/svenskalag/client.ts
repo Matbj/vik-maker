@@ -80,7 +80,7 @@ export class SvenskalagClient {
       await this.get(`${this.teamPath}/controlpanel/presence/chooseparticipants/${workoutId}?reload=false`),
     );
 
-    const present = new Set(presence.players.map((p) => p.memberId));
+    const present = new Set(presence.members.map((m) => m.memberId));
     const coachCheck = (memberId: string) => {
       if (!presence.registered) return null;
       return present.has(memberId) ? ("present" as const) : ("absent" as const);
@@ -90,19 +90,21 @@ export class SvenskalagClient {
     return [
       ...responses.map((r) => ({
         workoutId,
-        playerSvenskalagId: r.memberId,
-        playerName: r.name,
-        playerResponse: r.response,
+        memberSvenskalagId: r.memberId,
+        memberName: r.name,
+        role: r.role,
+        response: r.response,
         coachCheck: coachCheck(r.memberId),
       })),
-      // Players the coaches marked present without them ever answering.
-      ...presence.players
-        .filter((p) => !answered.has(p.memberId))
-        .map((p) => ({
+      // People the coaches marked present without them ever answering.
+      ...presence.members
+        .filter((m) => !answered.has(m.memberId))
+        .map((m) => ({
           workoutId,
-          playerSvenskalagId: p.memberId,
-          playerName: p.name,
-          playerResponse: "unanswered" as const,
+          memberSvenskalagId: m.memberId,
+          memberName: m.name,
+          role: m.role,
+          response: "unanswered" as const,
           coachCheck: "present" as const,
         })),
     ];

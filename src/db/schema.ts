@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -46,6 +47,19 @@ export const players = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex("players_svenskalag_id_idx").on(t.svenskalagId)],
+);
+
+/** The team's coaches (leaders on svenskalag.se), kept apart from the players. */
+export const coaches = pgTable(
+  "coaches",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    /** The coach's id on svenskalag.se. */
+    svenskalagId: text("svenskalag_id").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("coaches_svenskalag_id_idx").on(t.svenskalagId)],
 );
 
 /** A workout (training session) synced from svenskalag.se. */
@@ -93,13 +107,39 @@ export const workoutAttendance = pgTable(
   (t) => [primaryKey({ columns: [t.workoutId, t.playerId] })],
 );
 
-/** A generated training group for one workout, e.g. "A" or "B1 + B2". */
+export const workoutGroupKind = pgEnum("workout_group_kind", ["level", "team"]);
+
+/** Each coach's answer to a workout, and the attendance check on them. */
+export const workoutCoachAttendance = pgTable(
+  "workout_coach_attendance",
+  {
+    workoutId: uuid("workout_id")
+      .notNull()
+      .references(() => workouts.id, { onDelete: "cascade" }),
+    coachId: uuid("coach_id")
+      .notNull()
+      .references(() => coaches.id, { onDelete: "cascade" }),
+    /** What the coach answered. */
+    response: playerResponse("response").notNull().default("unanswered"),
+    /** What was recorded in the attendance check. Null until attendance is registered. */
+    coachCheck: coachCheck("coach_check"),
+    ...timestamps,
+  },
+  (t) => [primaryKey({ columns: [t.workoutId, t.coachId] })],
+);
+
+/** A generated group for one workout: a leveled group such as "B1 + B2", or a team. */
 export const workoutGroups = pgTable("workout_groups", {
   id: uuid("id").primaryKey().defaultRandom(),
   workoutId: uuid("workout_id")
     .notNull()
     .references(() => workouts.id, { onDelete: "cascade" }),
+  kind: workoutGroupKind("kind").notNull().default("level"),
   name: text("name").notNull(),
+  /** The levels a leveled group plays at, strongest first. Empty for teams. */
+  levelCodes: text("level_codes").array().notNull().default(sql`'{}'::text[]`),
+  /** 1 or 2 when the teams are split into two leagues. */
+  league: integer("league"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 });
@@ -120,6 +160,7 @@ export const workoutGroupMembers = pgTable(
 export type Level = typeof levels.$inferSelect;
 export type Player = typeof players.$inferSelect;
 export type NewPlayer = typeof players.$inferInsert;
+export type Coach = typeof coaches.$inferSelect;
 export type Workout = typeof workouts.$inferSelect;
 export type NewWorkout = typeof workouts.$inferInsert;
 export type WorkoutGroup = typeof workoutGroups.$inferSelect;
