@@ -25,7 +25,7 @@ This file describes the app as it is now. When a change affects anything below (
 
 ## Branding
 
-The app is called VIK Playmaker, for Vendelsö IK. Colors come from the club's crest, blue `#0053a1` and yellow `#ffd100`, and are defined as theme tokens in `src/app/globals.css`. Use `bg-accent` with `text-on-accent`, as the accent is blue in light mode and yellow in dark mode. The crest is `src/assets/vik-crest.png`, with `src/app/icon.png` and `src/app/apple-icon.png` as icons. `src/proxy.ts` must keep letting the icons through without a login. The header bar shows the crest with the page's title right next to it, set in `src/components/page-title.tsx`, so a new page needs its title there, and the app's name appears only in the browser tab.
+The app is called VIK Playmaker, for Vendelsö IK. Colors come from the club's crest, blue `#0053a1` and yellow `#ffd100`, and are defined as theme tokens in `src/app/globals.css`. Use `bg-accent` with `text-on-accent`, as the accent is blue in light mode and yellow in dark mode. The crest is `src/assets/vik-crest.png`, with `src/app/icon.png` and `src/app/apple-icon.png` as icons. `src/proxy.ts` must keep letting the icons through without a login. The header bar shows the crest on the left and the page's title in the middle, set in `src/components/page-title.tsx`, so a new page needs its title there, and the app's name appears only in the browser tab.
 
 ## Standing rules
 
