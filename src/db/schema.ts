@@ -72,7 +72,13 @@ export const attendanceStatus = pgEnum("attendance_status", [
   "unanswered",
 ]);
 
-/** Who has booked (or declined) a given workout. */
+export const attendanceCheckStatus = pgEnum("attendance_check_status", [
+  "present",
+  "absent",
+  "unchecked",
+]);
+
+/** Each player's answer to a workout, and the coaches' attendance check on it. */
 export const workoutAttendance = pgTable(
   "workout_attendance",
   {
@@ -82,7 +88,10 @@ export const workoutAttendance = pgTable(
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
+    /** What the player answered. */
     status: attendanceStatus("status").notNull().default("unanswered"),
+    /** What the coaches recorded in the attendance check on the workout. */
+    checkStatus: attendanceCheckStatus("check_status").notNull().default("unchecked"),
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workoutId, t.playerId] })],
