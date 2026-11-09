@@ -13,5 +13,8 @@ export type SvenskalagAttendance = {
   workoutId: string;
   playerSvenskalagId: string;
   playerName: string;
-  status: "attending" | "declined" | "unanswered";
+  /** What the player answered. */
+  playerResponse: "attending" | "declined" | "unanswered";
+  /** What the coaches recorded in the attendance check. Null until attendance is registered. */
+  coachCheck: "present" | "absent" | null;
 };

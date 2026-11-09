@@ -57,7 +57,7 @@ scripts/seed.ts           seeds levels
 - **levels**: A, B1, B2, C (a table, so levels can be renamed or added without a migration)
 - **players**: name, svenskalag id, level
 - **workouts**: synced from svenskalag.se, keyed on svenskalag's id
-- **workout_attendance**: who booked / declined each workout
+- **workout_attendance**: per workout and player, `player_response` (what the player answered) and `coach_check` (the coaches' attendance check, empty until registered)
 - **workout_groups** + **workout_group_members**: the generated groups for a workout
 
 ## svenskalag.se integration

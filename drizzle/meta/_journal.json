@@ -8,6 +8,13 @@
       "when": 1794256106612,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794258171901,
+      "tag": "0001_attendance_check_status",
+      "breakpoints": true
     }
   ]
 }
