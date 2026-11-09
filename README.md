@@ -84,8 +84,8 @@ them across the existing groups or teams.
 
 There is no public API, so the integration logs in with a coach's own account and reads
 the pages (or the JSON endpoints those pages call). It lives in `src/lib/svenskalag/` and is
-**server-only**: credentials come from env vars (`SVENSKALAG_*`), session cookies stay in
-server memory, and nothing is ever committed. It is read-only towards svenskalag.se.
+**server-only**: credentials come from env vars (`SVENSKALAG_*`), the session cookie is
+saved encrypted in the database, and nothing is ever committed. It is read-only towards svenskalag.se.
 
 Trainings come from the monthly calendar. Each player's answer comes from the activity page,
 and the coaches' check from the "Fyll i närvaro" page. A page that doesn't look as expected
