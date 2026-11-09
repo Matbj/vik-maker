@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { env } from "@/lib/env";
+import { LogoutButton } from "@/components/logout-button";
 import { Notice } from "@/components/notice";
 import { loadGroupingPreferences } from "@/lib/grouping/preferences";
 import { removeSeparation } from "./actions";
@@ -15,6 +16,7 @@ export default function SettingsPage() {
       <Suspense fallback={<p className="text-sm text-muted">Laddar inställningar…</p>}>
         <Settings />
       </Suspense>
+      <LogoutButton />
     </section>
   );
 }
