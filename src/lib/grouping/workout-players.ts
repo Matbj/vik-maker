@@ -40,6 +40,7 @@ export async function loadWorkoutPlayers(workoutId: string, levelOrder: string[]
   const pool = new Set(attending.map((row) => row.id));
   return {
     registered,
+    unanswered: rows.filter((row) => row.playerResponse === "unanswered").length,
     /** Why players who were asked aren't coming, for anyone still in a group or team. */
     absences: new Map(
       rows
@@ -74,6 +75,7 @@ export async function loadWorkoutCoaches(workoutId: string) {
   const registered = rows.some((row) => row.coachCheck !== null);
   return {
     registered,
+    unanswered: rows.filter((row) => row.response === "unanswered").length,
     coaches: rows.filter((row) =>
       registered ? row.coachCheck === "present" : row.response === "attending",
     ),

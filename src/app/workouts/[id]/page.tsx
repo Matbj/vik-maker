@@ -51,7 +51,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   if (!workout) notFound();
 
   const levelOrder = await loadLevelOrder();
-  const [{ players, registered, absences }, coachAttendance, groupRows, memberRows] = await Promise.all([
+  const [{ players, registered, unanswered, absences }, coachAttendance, groupRows, memberRows] = await Promise.all([
     loadWorkoutPlayers(id, levelOrder),
     loadWorkoutCoaches(id),
     db
@@ -111,13 +111,14 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           {workout.location && ` · ${workout.location}`}
         </p>
         <p className="mt-4 text-sm text-muted">
-          {players.length} {registered ? "spelare närvarande" : "spelare kommer"}
+          {players.length} {registered ? "spelare närvarande" : "spelare"} · {unanswered} inget svar
         </p>
         <p className="mt-1.5 text-sm text-muted">
           {coachAttendance.coaches.length}{" "}
-          {coachAttendance.registered ? "ledare närvarande" : "ledare kommer"}
+          {coachAttendance.registered ? "ledare närvarande" : "ledare"}
           {coachAttendance.coaches.length > 0 &&
             `: ${coachAttendance.coaches.map((coach) => coach.name.split(" ")[0]).join(", ")}`}
+          {` · ${coachAttendance.unanswered} inget svar`}
         </p>
         <p className="mt-3 text-xs text-muted">Uppdaterad {whenFormat.format(workout.syncedAt)}</p>
       </header>
