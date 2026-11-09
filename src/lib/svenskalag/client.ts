@@ -8,6 +8,7 @@ import {
   parseResponses,
   SvenskalagParseError,
 } from "./parse";
+import { loadSession, saveSession } from "./session-store";
 import type { SvenskalagAttendance, SvenskalagWorkout } from "./types";
 
 /** Pause between page loads, to be gentle with svenskalag.se. */
@@ -19,13 +20,16 @@ const REQUEST_DELAY_MS = 250;
  *
  * Rules for this module:
  * - Server-only. Credentials come from env vars and never reach the client.
- * - Session cookies are kept in memory on the server, never in the repo.
+ * - Session cookies are saved encrypted in the database between runs, so the
+ *   app only logs in when the saved session has expired. Never in the repo.
  * - Read-only. The login POST is the only non-GET request; never call the
  *   endpoints that save replies, send invites or register attendance.
  * - Activity pages include guardians' phone numbers. Never store or log raw HTML.
  */
 export class SvenskalagClient {
   private cookies = new Map<string, string>();
+  /** True while using a session from an earlier run, which may have expired. */
+  private usingSavedSession = false;
 
   constructor(
     private readonly baseUrl = env.SVENSKALAG_BASE_URL,
@@ -56,30 +60,35 @@ export class SvenskalagClient {
     const result = (await response.json()) as { error?: string };
     if (result.error) throw new Error(`svenskalag.se login failed: ${result.error}`);
 
+    this.cookies.clear();
     this.storeCookies(response);
     if (this.cookies.size === 0) throw new SvenskalagParseError("login set no session cookie");
+    this.usingSavedSession = false;
+    await saveSession(this.cookies);
   }
 
   async fetchWorkouts(range: { from: Date; to: Date }): Promise<SvenskalagWorkout[]> {
-    await this.ensureSession();
-    const workouts: SvenskalagWorkout[] = [];
-    const month = new Date(Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), 1));
+    return this.withSession(async () => {
+      const workouts: SvenskalagWorkout[] = [];
+      const month = new Date(Date.UTC(range.from.getUTCFullYear(), range.from.getUTCMonth(), 1));
 
-    while (month <= range.to) {
-      const html = await this.get(`${this.teamPath}/kalender/${calendarMonthPath(month)}`);
-      workouts.push(...parseCalendarMonth(html, month.getUTCFullYear(), month.getUTCMonth() + 1));
-      month.setUTCMonth(month.getUTCMonth() + 1);
-    }
+      while (month <= range.to) {
+        const html = await this.get(`${this.teamPath}/kalender/${calendarMonthPath(month)}`);
+        workouts.push(...parseCalendarMonth(html, month.getUTCFullYear(), month.getUTCMonth() + 1));
+        month.setUTCMonth(month.getUTCMonth() + 1);
+      }
 
-    return workouts.filter((w) => w.startsAt >= range.from && w.startsAt <= range.to);
+      return workouts.filter((w) => w.startsAt >= range.from && w.startsAt <= range.to);
+    });
   }
 
   async fetchAttendance(workoutId: string): Promise<SvenskalagAttendance[]> {
-    await this.ensureSession();
-    const responses = parseResponses(await this.get(`${this.teamPath}/aktivitet/${workoutId}`));
-    const presence = parsePresence(
-      await this.get(`${this.teamPath}/controlpanel/presence/chooseparticipants/${workoutId}?reload=false`),
-    );
+    const { responses, presence } = await this.withSession(async () => ({
+      responses: parseResponses(await this.get(`${this.teamPath}/aktivitet/${workoutId}`)),
+      presence: parsePresence(
+        await this.get(`${this.teamPath}/controlpanel/presence/chooseparticipants/${workoutId}?reload=false`),
+      ),
+    }));
 
     const present = new Set(presence.members.map((m) => m.memberId));
     const coachCheck = (memberId: string) => {
@@ -112,12 +121,30 @@ export class SvenskalagClient {
   }
 
   async fetchCoachContacts() {
+    return this.withSession(async () => parseCoachContacts(await this.get(`${this.teamPath}/kontaktlista`)));
+  }
+
+  /** An expired session shows up as a page that doesn't parse, so log in once and read it again. */
+  private async withSession<T>(read: () => Promise<T>): Promise<T> {
     await this.ensureSession();
-    return parseCoachContacts(await this.get(`${this.teamPath}/kontaktlista`));
+    try {
+      return await read();
+    } catch (error) {
+      if (!this.usingSavedSession || !(error instanceof SvenskalagParseError)) throw error;
+      await this.login();
+      return read();
+    }
   }
 
   private async ensureSession() {
-    if (this.cookies.size === 0) await this.login();
+    if (this.cookies.size > 0) return;
+    const saved = await loadSession();
+    if (saved) {
+      this.cookies = saved;
+      this.usingSavedSession = true;
+    } else {
+      await this.login();
+    }
   }
 
   private async get(path: string) {
@@ -127,15 +154,21 @@ export class SvenskalagClient {
       headers: { Cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ") },
     });
     if (!response.ok) throw new Error(`svenskalag.se returned ${response.status} for ${path}`);
-    this.storeCookies(response);
+    if (this.storeCookies(response)) await saveSession(this.cookies);
     return response.text();
   }
 
+  /** Returns whether any cookie changed. */
   private storeCookies(response: Response) {
+    let changed = false;
     for (const cookie of response.headers.getSetCookie()) {
       const [pair] = cookie.split(";");
       const separator = pair.indexOf("=");
-      this.cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
+      const name = pair.slice(0, separator);
+      const value = pair.slice(separator + 1);
+      if (this.cookies.get(name) !== value) changed = true;
+      this.cookies.set(name, value);
     }
+    return changed;
   }
 }
