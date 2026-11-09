@@ -12,7 +12,7 @@ const DEFAULT_LEVELS = [
   { code: "C", name: "C", sortOrder: 4 },
 ];
 
-async function main() {
+export async function seedLevels() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set (put it in .env.local)");
   const db = drizzle(neon(url));
@@ -20,7 +20,9 @@ async function main() {
   console.log("Seeded levels:", DEFAULT_LEVELS.map((l) => l.code).join(", "));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1]?.endsWith("seed.ts")) {
+  seedLevels().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
