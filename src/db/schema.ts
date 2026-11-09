@@ -57,10 +57,35 @@ export const coaches = pgTable(
     name: text("name").notNull(),
     /** The coach's id on svenskalag.se. */
     svenskalagId: text("svenskalag_id").notNull(),
+    /** Lower-case, from svenskalag.se's contact list. Null means the coach can't log in. */
+    email: text("email"),
     ...timestamps,
   },
   (t) => [uniqueIndex("coaches_svenskalag_id_idx").on(t.svenskalagId)],
 );
+
+/** The login code a coach was last emailed. One per coach; a new code replaces the old. */
+export const loginCodes = pgTable("login_codes", {
+  coachId: uuid("coach_id")
+    .primaryKey()
+    .references(() => coaches.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  /** How many codes were sent since sendWindowStartedAt, to cap the emails per hour. */
+  sendCount: integer("send_count").notNull().default(1),
+  sendWindowStartedAt: timestamp("send_window_started_at", { withTimezone: true }).notNull(),
+});
+
+/** A logged-in coach's browser. The cookie holds the token, this table only its hash. */
+export const sessions = pgTable("sessions", {
+  tokenHash: text("token_hash").primaryKey(),
+  coachId: uuid("coach_id")
+    .notNull()
+    .references(() => coaches.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
 /** A workout (training session) synced from svenskalag.se. */
 export const workouts = pgTable(

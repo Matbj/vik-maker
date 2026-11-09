@@ -43,6 +43,13 @@
       "when": 1794264690605,
       "tag": "0005_abandoned_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794265098614,
+      "tag": "0006_coach_login",
+      "breakpoints": true
     }
   ]
 }

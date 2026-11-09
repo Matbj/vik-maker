@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 8100",
-    "build": "tsx scripts/vercel-prebuild.ts && next build",
+    "build": "tsx --conditions=react-server scripts/vercel-prebuild.ts && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",

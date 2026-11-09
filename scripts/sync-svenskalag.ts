@@ -8,6 +8,12 @@ async function main() {
   const { defaultSyncRange, syncWorkouts } = await import("../src/lib/svenskalag/sync");
   const range = defaultSyncRange();
 
+  if (process.argv.includes("--coach-emails")) {
+    const { syncCoachEmails } = await import("../src/lib/svenskalag/sync");
+    console.log(await syncCoachEmails());
+    return;
+  }
+
   if (!process.argv.includes("--dry-run")) {
     console.log(await syncWorkouts(range));
     return;
