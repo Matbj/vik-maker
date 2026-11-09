@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { requireEnv } from "@/lib/env";
 import { findGroupingProblems, type LevelGroupProposal } from "./level-groups";
@@ -45,13 +45,11 @@ export async function proposeLevelGroups(
 
   let feedback = "";
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const response = await client.beta.messages.parse({
-      model: "claude-opus-5-5",
+    const response = await client.messages.parse({
+      model: "claude-haiku-5-5",
       max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
       thinking: { type: "adaptive" },
-      output_config: { effort: "medium", format: betaZodOutputFormat(proposalSchema) },
+      output_config: { effort: "low", format: zodOutputFormat(proposalSchema) },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: `${input}${feedback}` }],
     });

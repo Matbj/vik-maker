@@ -47,7 +47,7 @@ export function LevelGroupsForm({
           {pending ? "Thinking…" : hasGroups ? "Create new groups" : "Create groups"}
         </button>
       </div>
-      {pending && <p className="text-sm text-muted">This can take up to a minute.</p>}
+      {pending && <p className="text-sm text-muted">This takes a few seconds.</p>}
       <FormError state={state} />
     </form>
   );
