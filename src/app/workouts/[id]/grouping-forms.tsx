@@ -1,7 +1,13 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createLevelGroups, createTeams, type GroupingState } from "./actions";
+import {
+  createLevelGroups,
+  createTeams,
+  refreshAttendance,
+  spreadNewPlayers,
+  type GroupingState,
+} from "./actions";
 
 const inputClass =
   "w-16 rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-center dark:border-white/10";
@@ -52,6 +58,45 @@ function useLinkedCounts(playerCount: number, initialCount: number, maxCount: nu
     smallest: Math.floor(playerCount / count),
     largest: Math.ceil(playerCount / count),
   };
+}
+
+export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
+  const [state, action, pending] = useActionState(refreshAttendance, {});
+  return (
+    <form action={action} className="space-y-1">
+      <input type="hidden" name="workoutId" value={workoutId} />
+      <button
+        type="submit"
+        disabled={pending}
+        className="whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
+      >
+        {pending ? "Refreshing…" : "Refresh attendance"}
+      </button>
+      <FormError state={state} />
+    </form>
+  );
+}
+
+export function SpreadButton({
+  workoutId,
+  kind,
+  label,
+}: {
+  workoutId: string;
+  kind: "level" | "team";
+  label: string;
+}) {
+  const [state, action, pending] = useActionState(spreadNewPlayers, {});
+  return (
+    <form action={action} className="space-y-1">
+      <input type="hidden" name="workoutId" value={workoutId} />
+      <input type="hidden" name="kind" value={kind} />
+      <button type="submit" disabled={pending} className={buttonClass}>
+        {pending ? "Thinking…" : label}
+      </button>
+      <FormError state={state} />
+    </form>
+  );
 }
 
 export function LevelGroupsForm({

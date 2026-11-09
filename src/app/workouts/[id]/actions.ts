@@ -2,13 +2,14 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
-import { proposeLevelGroups } from "@/lib/grouping/claude-groups";
+import { proposeLevelGroups, proposeSpread } from "@/lib/grouping/claude-groups";
 import { levelGroupNames } from "@/lib/grouping/level-groups";
 import { buildTeams } from "@/lib/grouping/teams";
 import { loadLevelOrder, loadWorkoutPlayers, withHistory } from "@/lib/grouping/workout-players";
+import { refreshWorkoutAttendance } from "@/lib/svenskalag/sync";
 
 export type GroupingState = { error?: string };
 
@@ -93,6 +94,89 @@ export async function createLevelGroups(
       "level",
       proposal.map((group, i) => ({ ...group, name: names[i], league: null })),
     );
+    return {};
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
+
+export async function refreshAttendance(
+  _previous: GroupingState,
+  formData: FormData,
+): Promise<GroupingState> {
+  const workoutId = z.uuid().safeParse(formData.get("workoutId"));
+  if (!workoutId.success) return { error: "This workout no longer exists." };
+
+  try {
+    const workout = await loadWorkout(workoutId.data);
+    await refreshWorkoutAttendance(workout.id, workout.svenskalagId);
+    revalidatePath(`/workouts/${workout.id}`);
+    return {};
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
+
+const spreadForm = z.object({ workoutId: z.uuid(), kind: z.enum(["level", "team"]) });
+
+export async function spreadNewPlayers(
+  _previous: GroupingState,
+  formData: FormData,
+): Promise<GroupingState> {
+  const form = spreadForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "This workout no longer exists." };
+  const { workoutId, kind } = form.data;
+
+  try {
+    const db = getDb();
+    const workout = await loadWorkout(workoutId);
+    const levelOrder = await loadLevelOrder();
+    const { players } = await loadWorkoutPlayers(workoutId, levelOrder);
+    const groups = await db
+      .select()
+      .from(schema.workoutGroups)
+      .where(and(eq(schema.workoutGroups.workoutId, workoutId), eq(schema.workoutGroups.kind, kind)));
+    if (groups.length === 0) return { error: "Create the groups or teams first." };
+
+    const members = await db
+      .select({
+        groupId: schema.workoutGroupMembers.groupId,
+        playerId: schema.workoutGroupMembers.playerId,
+        levelCode: schema.levels.code,
+      })
+      .from(schema.workoutGroupMembers)
+      .innerJoin(schema.players, eq(schema.players.id, schema.workoutGroupMembers.playerId))
+      .leftJoin(schema.levels, eq(schema.levels.id, schema.players.levelId))
+      .where(
+        inArray(
+          schema.workoutGroupMembers.groupId,
+          groups.map((group) => group.id),
+        ),
+      );
+
+    const placedIds = new Set(members.map((member) => member.playerId));
+    const newPlayers = players.filter((player) => !placedIds.has(player.id));
+    if (newPlayers.length === 0) return {};
+
+    const here = new Set(players.map((player) => player.id));
+    const placements = await proposeSpread(
+      await withHistory(newPlayers, workout.startsAt),
+      groups.map((group) => ({
+        id: group.id,
+        levelCodes: group.levelCodes,
+        league: group.league,
+        members: members
+          .filter((member) => member.groupId === group.id)
+          .map((member) => ({ levelCode: member.levelCode, absent: !here.has(member.playerId) })),
+      })),
+      levelOrder,
+    );
+
+    await db
+      .insert(schema.workoutGroupMembers)
+      .values(placements.map(({ groupId, playerId }) => ({ groupId, playerId })))
+      .onConflictDoNothing();
+    revalidatePath(`/workouts/${workoutId}`);
     return {};
   } catch (error) {
     return errorMessage(error);

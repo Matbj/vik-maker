@@ -69,6 +69,62 @@ export function findGroupingProblems(
   return problems;
 }
 
+export type SpreadGroup = {
+  id: string;
+  levelCodes: string[];
+  league: number | null;
+  members: { levelCode: string | null; absent: boolean }[];
+};
+export type SpreadPlacement = { playerId: string; groupId: string };
+
+/** Everything wrong with where new players were put. Empty means it can be used. */
+export function findSpreadProblems(
+  placements: SpreadPlacement[],
+  newPlayers: GroupingPlayer[],
+  groups: SpreadGroup[],
+  levelOrder: string[],
+): string[] {
+  const problems: string[] = [];
+  const groupsById = new Map(groups.map((g) => [g.id, g]));
+  const playersById = new Map(newPlayers.map((p) => [p.id, p]));
+  const placed = new Set<string>();
+  const added = new Map<string, number>();
+
+  for (const { playerId, groupId } of placements) {
+    const player = playersById.get(playerId);
+    const group = groupsById.get(groupId);
+    if (!player) {
+      problems.push(`Unknown player ${playerId}.`);
+    } else if (!group) {
+      problems.push(`Unknown group ${groupId}.`);
+    } else if (placed.has(playerId)) {
+      problems.push(`Player ${playerId} was placed more than once.`);
+    } else if (levelMove(player.levelCode, group.levelCodes, levelOrder).steps > 1) {
+      problems.push(`Player ${playerId} (${player.levelCode}) moves more than one level in ${groupId}.`);
+    }
+    placed.add(playerId);
+    added.set(groupId, (added.get(groupId) ?? 0) + 1);
+  }
+
+  const missing = newPlayers.filter((p) => !placed.has(p.id)).map((p) => p.id);
+  if (missing.length > 0) problems.push(`Players not placed: ${missing.join(", ")}.`);
+
+  // Teams must stay even, counting only the players who are actually there.
+  const teams = groups.filter((g) => g.levelCodes.length === 0);
+  for (const league of new Set(teams.map((t) => t.league))) {
+    const sizes = teams
+      .filter((t) => t.league === league)
+      .map((t) => ({ id: t.id, size: t.members.filter((m) => !m.absent).length }));
+    const before = sizes.map((t) => t.size);
+    const after = sizes.map((t) => t.size + (added.get(t.id) ?? 0));
+    const allowedGap = Math.max(1, Math.max(...before) - Math.min(...before));
+    if (Math.max(...after) - Math.min(...after) > allowedGap) {
+      problems.push(`Teams are too uneven after placing players: ${after.join(", ")}.`);
+    }
+  }
+  return problems;
+}
+
 /** "A", "B1 + B2", and a number when several groups share the same levels. */
 export function levelGroupNames(groups: { levelCodes: string[] }[]) {
   const base = groups.map((g) => g.levelCodes.join(" + "));

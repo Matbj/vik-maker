@@ -36,8 +36,18 @@ export async function loadWorkoutPlayers(workoutId: string, levelOrder: string[]
     registered ? row.coachCheck === "present" : row.playerResponse === "attending",
   );
 
+  const pool = new Set(attending.map((row) => row.id));
   return {
     registered,
+    /** Why players who were asked aren't coming, for anyone still in a group or team. */
+    absences: new Map(
+      rows
+        .filter((row) => !pool.has(row.id))
+        .map((row) => {
+          const reason = registered ? "Absent" : row.playerResponse === "declined" ? "Declined" : "No answer";
+          return [row.id, reason] as const;
+        }),
+    ),
     players: attending.map(({ id, name, levelCode }): WorkoutPlayer => {
       const rank = levelCode ? levelOrder.indexOf(levelCode) : levelOrder.length;
       return { id, name, levelCode, levelRank: rank };

@@ -57,6 +57,18 @@ export async function syncWorkouts(range: { from: Date; to: Date }) {
   return { workouts: workouts.length, players: players.size, coaches: coaches.size, attendanceRows };
 }
 
+/** Re-reads one workout's attendance from svenskalag.se. */
+export async function refreshWorkoutAttendance(workoutId: string, svenskalagId: string) {
+  const attendance = await new SvenskalagClient().fetchAttendance(svenskalagId);
+  const now = new Date();
+  await syncPlayerAttendance(workoutId, attendance.filter((a) => a.role === "player"), now);
+  await syncCoachAttendance(workoutId, attendance.filter((a) => a.role === "coach"), now);
+  await getDb()
+    .update(schema.workouts)
+    .set({ syncedAt: now, updatedAt: now })
+    .where(eq(schema.workouts.id, workoutId));
+}
+
 async function syncPlayerAttendance(workoutId: string, attendance: SvenskalagAttendance[], now: Date) {
   const db = getDb();
   const { players, workoutAttendance } = schema;

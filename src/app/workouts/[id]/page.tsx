@@ -11,7 +11,7 @@ import {
   loadWorkoutCoaches,
   loadWorkoutPlayers,
 } from "@/lib/grouping/workout-players";
-import { LevelGroupsForm, TeamsForm } from "./grouping-forms";
+import { LevelGroupsForm, RefreshAttendanceButton, SpreadButton, TeamsForm } from "./grouping-forms";
 
 const DEFAULT_PLAYERS_PER_GROUP = 8;
 const DEFAULT_PLAYERS_PER_TEAM = 7;
@@ -51,7 +51,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   if (!workout) notFound();
 
   const levelOrder = await loadLevelOrder();
-  const [{ players, registered }, coachAttendance, groupRows, memberRows] = await Promise.all([
+  const [{ players, registered, absences }, coachAttendance, groupRows, memberRows] = await Promise.all([
     loadWorkoutPlayers(id, levelOrder),
     loadWorkoutCoaches(id),
     db
@@ -81,6 +81,23 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   const levelGroups = groups.filter((g) => g.kind === "level");
   const teams = groups.filter((g) => g.kind === "team");
 
+  const here = new Set(players.map((player) => player.id));
+  const absenceOf = (playerId: string) =>
+    here.has(playerId) ? null : (absences.get(playerId) ?? "Not attending");
+  const countLabel = (members: { id: string }[]) => {
+    const missing = members.filter((member) => !here.has(member.id)).length;
+    return missing > 0 ? `${members.length - missing} + ${missing} absent` : String(members.length);
+  };
+
+  const inGroup = new Set(levelGroups.flatMap((g) => g.members.map((m) => m.id)));
+  const inTeam = new Set(teams.flatMap((t) => t.members.map((m) => m.id)));
+  const newToGroups = levelGroups.length > 0 ? players.filter((p) => !inGroup.has(p.id)) : [];
+  const newToTeams = teams.length > 0 ? players.filter((p) => !inTeam.has(p.id)) : [];
+  const newPlayers = [...new Map([...newToGroups, ...newToTeams].map((p) => [p.id, p])).values()];
+  const absentCount = new Set(
+    groups.flatMap((g) => g.members.map((m) => m.id)).filter((playerId) => !here.has(playerId)),
+  ).size;
+
   return (
     <div className="space-y-8">
       <header>
@@ -98,7 +115,41 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           {coachAttendance.coaches.length > 0 &&
             `: ${coachAttendance.coaches.map((coach) => coach.name).join(", ")}`}
         </p>
+        <div className="mt-3 flex items-center gap-3">
+          <RefreshAttendanceButton workoutId={id} />
+          <span className="text-xs text-muted">Updated {whenFormat.format(workout.syncedAt)}</span>
+        </div>
       </header>
+
+      {absentCount > 0 && (
+        <p role="status" className="rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white">
+          {absentCount} {absentCount === 1 ? "player" : "players"} in the groups or teams below{" "}
+          {absentCount === 1 ? "is" : "are"} no longer coming.
+        </p>
+      )}
+
+      {newPlayers.length > 0 && (
+        <div className="space-y-3 rounded-xl border-2 border-accent p-4">
+          <h2 className="font-semibold">
+            {newPlayers.length} new {newPlayers.length === 1 ? "player" : "players"} without a place
+          </h2>
+          <ul className="flex flex-wrap gap-2">
+            {newPlayers.map((player) => (
+              <li key={player.id} className="rounded-full bg-accent/10 px-3 py-1 text-sm">
+                {player.name} <span className="text-xs font-semibold text-accent">{player.levelCode ?? "–"}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            {newToGroups.length > 0 && (
+              <SpreadButton workoutId={id} kind="level" label={`Spread ${newToGroups.length} across groups`} />
+            )}
+            {newToTeams.length > 0 && (
+              <SpreadButton workoutId={id} kind="team" label={`Spread ${newToTeams.length} across teams`} />
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Leveled groups</h2>
@@ -110,18 +161,17 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         />
         <div className="grid gap-3 sm:grid-cols-2">
           {levelGroups.map((group) => (
-            <GroupCard key={group.id} title={group.name} count={group.members.length}>
+            <GroupCard key={group.id} title={group.name} count={countLabel(group.members)}>
               {group.members.map((member) => {
                 const { direction } = levelMove(member.levelCode, group.levelCodes, levelOrder);
                 return (
-                  <li key={member.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
-                    <span className="truncate">{member.name}</span>
+                  <MemberRow key={member.id} name={member.name} absence={absenceOf(member.id)}>
                     {direction && (
                       <span className="shrink-0 text-xs font-semibold text-accent">
                         {direction === "up" ? "↑" : "↓"} from {member.levelCode}
                       </span>
                     )}
-                  </li>
+                  </MemberRow>
                 );
               })}
             </GroupCard>
@@ -142,13 +192,12 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
             <GroupCard
               key={team.id}
               title={team.league ? `League ${team.league} · ${team.name}` : team.name}
-              count={team.members.length}
+              count={countLabel(team.members)}
             >
               {team.members.map((member) => (
-                <li key={member.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
-                  <span className="truncate">{member.name}</span>
+                <MemberRow key={member.id} name={member.name} absence={absenceOf(member.id)}>
                   <span className="shrink-0 text-xs text-muted">{member.levelCode ?? "–"}</span>
-                </li>
+                </MemberRow>
               ))}
             </GroupCard>
           ))}
@@ -158,13 +207,40 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   );
 }
 
+function MemberRow({
+  name,
+  absence,
+  children,
+}: {
+  name: string;
+  absence: string | null;
+  children: React.ReactNode;
+}) {
+  if (absence) {
+    return (
+      <li className="flex items-center justify-between gap-2 bg-red-500/15 px-3 py-1.5 text-sm">
+        <span className="truncate font-medium text-red-700 line-through dark:text-red-400">{name}</span>
+        <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
+          {absence}
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
+      <span className="truncate">{name}</span>
+      {children}
+    </li>
+  );
+}
+
 function GroupCard({
   title,
   count,
   children,
 }: {
   title: string;
-  count: number;
+  count: string;
   children: React.ReactNode;
 }) {
   return (

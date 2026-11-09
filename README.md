@@ -73,6 +73,10 @@ On a workout's page, coaches create groups by hand, and they stay until replaced
   player gets a spot, so team sizes differ by at most one. With 4 or more teams they can be
   split into two leagues by level.
 
+A workout's page can refresh its attendance on demand. Players who have stopped coming stay in
+their group or team, clearly marked. New players are listed separately, and Claude can spread
+them across the existing groups or teams.
+
 ## svenskalag.se integration
 
 There is no public API, so the integration logs in with a coach's own account and reads
