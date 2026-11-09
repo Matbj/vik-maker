@@ -5,6 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import crest from "@/assets/vik-crest.png";
 import { BottomNav } from "@/components/bottom-nav";
 import { LogoutButton } from "@/components/logout-button";
+import { PageTitle } from "@/components/page-title";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,11 +38,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="sv" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
         <header className="sticky top-0 z-10 border-b-2 border-gold bg-brand pt-[env(safe-area-inset-top)] text-white">
-          <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-4">
-            <span className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+          <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-4">
+            <div className="flex min-w-0 items-center gap-2.5">
               <Image src={crest} alt="Vendelsö IK:s klubbmärke" height={40} loading="eager" />
-              VIK Playmaker
-            </span>
+              <Suspense>
+                <PageTitle />
+              </Suspense>
+            </div>
             <Suspense>
               <LogoutButton />
             </Suspense>

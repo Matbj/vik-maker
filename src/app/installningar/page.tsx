@@ -12,7 +12,6 @@ import { AddSeparationForm, GroupingNotesForm } from "./settings-forms";
 export default function SettingsPage() {
   return (
     <section className="space-y-6">
-      <h1 className="text-2xl font-semibold">Inställningar</h1>
       <Suspense fallback={<p className="text-sm text-muted">Laddar inställningar…</p>}>
         <Settings />
       </Suspense>

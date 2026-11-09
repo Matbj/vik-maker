@@ -11,7 +11,6 @@ const listClass =
 export default function TeamPage() {
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Truppen</h1>
       <Suspense fallback={<p className="text-sm text-muted">Laddar truppen…</p>}>
         <Team />
       </Suspense>

@@ -23,7 +23,6 @@ const timeFormat = new Intl.DateTimeFormat("sv-SE", {
 export default function WorkoutsPage() {
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Kommande träningar</h1>
       <Suspense fallback={<p className="text-sm text-muted">Laddar träningar…</p>}>
         <WorkoutLists />
       </Suspense>
