@@ -28,7 +28,7 @@ const whenFormat = new Intl.DateTimeFormat("sv-SE", {
   minute: "2-digit",
 });
 
-export default function WorkoutPage({ params }: PageProps<"/workouts/[id]">) {
+export default function WorkoutPage({ params }: PageProps<"/traningar/[id]">) {
   return (
     <section className="space-y-6">
       <Link href="/" className="inline-block text-sm text-muted">
@@ -41,7 +41,7 @@ export default function WorkoutPage({ params }: PageProps<"/workouts/[id]">) {
   );
 }
 
-async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params"] }) {
+async function Workout({ params }: { params: PageProps<"/traningar/[id]">["params"] }) {
   await connection();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();

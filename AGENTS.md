@@ -18,8 +18,8 @@ This file describes the app as it is now. When a change affects anything below (
 
 ## Language
 
-- All code is in English: identifiers, comments, database names, AI prompts, commit messages and docs.
-- Everything users see is in Swedish: page text, buttons, form and error messages that reach the UI (including those thrown in `src/lib/`), page metadata, the login email and `<html lang>`.
+- All code is in English: identifiers, comments, database names, AI prompts, commit messages and docs. Page routes are the exception, as their folder names are the addresses users see.
+- Everything users see is in Swedish: page addresses (without å, ä and ö), page text, buttons, form and error messages that reach the UI (including those thrown in `src/lib/`), page metadata, the login email and `<html lang>`.
 - Data keeps its own language, such as svenskalag.se titles and the group names.
 - Use the words coaches know from svenskalag.se and football: workout is "träning", coach is "ledare", team is "lag", league is "serie".
 
@@ -45,13 +45,13 @@ Next.js 16 (App Router, Cache Components), React 19, TypeScript, Tailwind CSS v4
 | Route | Purpose |
 | --- | --- |
 | `/` | Workouts |
-| `/workouts/[id]` | One workout: attendance, leveled groups, teams, spreading new players |
-| `/players` | "Truppen": the coaches with roles and phone numbers, then active players and their levels |
-| `/settings` | Keep-apart pairs and free-text grouping notes |
-| `/login` | Email code login for coaches |
+| `/traningar/[id]` | One workout: attendance, leveled groups, teams, spreading new players |
+| `/truppen` | The coaches with roles and phone numbers, then active players and their levels |
+| `/installningar` | Keep-apart pairs and free-text grouping notes |
+| `/logga-in` | Email code login for coaches |
 | `/api/cron/sync-svenskalag` | Daily sync at 14:00 UTC, protected by `CRON_SECRET` |
 
-`src/proxy.ts` requires a logged-in coach for every page and Server Action, except `/api/cron/`.
+`src/proxy.ts` requires a logged-in coach for every page and Server Action, except `/api/cron/`. `next.config.ts` redirects the old English addresses to these.
 
 ## How it works
 

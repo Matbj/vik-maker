@@ -42,7 +42,7 @@ backward compatible, because they run before the new code is live.
 
 ```
 src/
-  app/                    routes (Workouts = /, Players = /players)
+  app/                    routes (Träningar = /, Truppen = /truppen)
   components/             shared UI
   db/schema.ts            levels, players, workouts, attendance, workout groups
   db/index.ts             lazy Neon/Drizzle client (server-only)
