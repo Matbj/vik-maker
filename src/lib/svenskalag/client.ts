@@ -3,6 +3,7 @@ import { env, requireEnv } from "@/lib/env";
 import {
   calendarMonthPath,
   parseCalendarMonth,
+  parseCoachContacts,
   parsePresence,
   parseResponses,
   SvenskalagParseError,
@@ -108,6 +109,11 @@ export class SvenskalagClient {
           coachCheck: "present" as const,
         })),
     ];
+  }
+
+  async fetchCoachContacts() {
+    await this.ensureSession();
+    return parseCoachContacts(await this.get(`${this.teamPath}/kontaktlista`));
   }
 
   private async ensureSession() {

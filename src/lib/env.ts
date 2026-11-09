@@ -13,6 +13,8 @@ const schema = z.object({
   SVENSKALAG_PASSWORD: z.string().optional(),
   CRON_SECRET: z.string().optional(),
   CLAUDE_API_KEY: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM: z.string().default("Vik Maker <playmaker@mail.blund.tech>"),
 });
 
 export const env = schema.parse(process.env);

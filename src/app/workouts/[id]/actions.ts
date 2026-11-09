@@ -5,10 +5,14 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
-import { proposeLevelGroups, proposeSpread } from "@/lib/grouping/claude-groups";
-import { levelGroupNames } from "@/lib/grouping/level-groups";
-import { buildTeams } from "@/lib/grouping/teams";
-import { loadLevelOrder, loadWorkoutPlayers, withHistory } from "@/lib/grouping/workout-players";
+import { proposeLevelGroups, proposeSpread, proposeTeams } from "@/lib/grouping/claude-groups";
+import { loadGroupingPreferences } from "@/lib/grouping/preferences";
+import {
+  loadLevelOrder,
+  loadRecentTeams,
+  loadWorkoutPlayers,
+  withHistory,
+} from "@/lib/grouping/workout-players";
 import { refreshWorkoutAttendance } from "@/lib/svenskalag/sync";
 
 export type GroupingState = { error?: string };
@@ -87,12 +91,12 @@ export async function createLevelGroups(
       await withHistory(players, workout.startsAt),
       levelOrder,
       groupCount,
+      await loadGroupingPreferences(),
     );
-    const names = levelGroupNames(proposal);
     await replaceGroups(
       workoutId,
       "level",
-      proposal.map((group, i) => ({ ...group, name: names[i], league: null })),
+      proposal.map((group) => ({ ...group, league: null })),
     );
     return {};
   } catch (error) {
@@ -167,14 +171,19 @@ export async function spreadNewPlayers(
         league: group.league,
         members: members
           .filter((member) => member.groupId === group.id)
-          .map((member) => ({ levelCode: member.levelCode, absent: !here.has(member.playerId) })),
+          .map((member) => ({
+            id: member.playerId,
+            levelCode: member.levelCode,
+            absent: !here.has(member.playerId),
+          })),
       })),
       levelOrder,
+      await loadGroupingPreferences(),
     );
 
     await db
       .insert(schema.workoutGroupMembers)
-      .values(placements.map(({ groupId, playerId }) => ({ groupId, playerId })))
+      .values(placements.map(({ groupId, playerId }) => ({ groupId, playerId, addedLate: true })))
       .onConflictDoNothing();
     revalidatePath(`/workouts/${workoutId}`);
     return {};
@@ -192,19 +201,24 @@ export async function createTeams(
   const { workoutId, teamCount, twoLeagues } = form.data;
 
   try {
-    const { players } = await loadWorkoutPlayers(workoutId, await loadLevelOrder());
+    const workout = await loadWorkout(workoutId);
+    const levelOrder = await loadLevelOrder();
+    const { players } = await loadWorkoutPlayers(workoutId, levelOrder);
     if (players.length < teamCount) {
       return { error: `There are only ${players.length} players for ${teamCount} teams.` };
     }
 
-    const teams = buildTeams(players, {
-      teamCount,
-      twoLeagues: Boolean(twoLeagues) && teamCount >= 4,
-    });
+    const teams = await proposeTeams(
+      await withHistory(players, workout.startsAt),
+      levelOrder,
+      { teamCount, twoLeagues: Boolean(twoLeagues) && teamCount >= 4 },
+      await loadRecentTeams(workoutId, workout.startsAt),
+      await loadGroupingPreferences(),
+    );
     await replaceGroups(
       workoutId,
       "team",
-      teams.map((team) => ({ ...team, levelCodes: [] })),
+      teams.map((team, i) => ({ ...team, name: `Team ${i + 1}`, levelCodes: [] })),
     );
     return {};
   } catch (error) {

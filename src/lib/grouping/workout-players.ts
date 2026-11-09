@@ -1,8 +1,9 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
 const HISTORY_WORKOUTS = 8;
+const RECENT_TEAM_WORKOUTS = 3;
 
 export type WorkoutPlayer = { id: string; name: string; levelCode: string | null; levelRank: number };
 export type PlayerWithHistory = WorkoutPlayer & {
@@ -77,6 +78,34 @@ export async function loadWorkoutCoaches(workoutId: string) {
       registered ? row.coachCheck === "present" : row.response === "attending",
     ),
   };
+}
+
+/** The teams from recent workouts, newest first, so the same players don't always end up together. */
+export async function loadRecentTeams(workoutId: string, workoutStartsAt: Date) {
+  const { workouts, workoutGroups, workoutGroupMembers } = schema;
+  const db = getDb();
+  const before = new Date(Math.min(workoutStartsAt.getTime(), Date.now()));
+  const rows = await db
+    .select({
+      workoutId: workoutGroups.workoutId,
+      startsAt: workouts.startsAt,
+      groupId: workoutGroups.id,
+      playerId: workoutGroupMembers.playerId,
+    })
+    .from(workoutGroupMembers)
+    .innerJoin(workoutGroups, eq(workoutGroups.id, workoutGroupMembers.groupId))
+    .innerJoin(workouts, eq(workouts.id, workoutGroups.workoutId))
+    .where(and(eq(workoutGroups.kind, "team"), lt(workouts.startsAt, before), ne(workouts.id, workoutId)))
+    .orderBy(desc(workouts.startsAt));
+
+  const recentWorkouts = [...new Set(rows.map((row) => row.workoutId))].slice(0, RECENT_TEAM_WORKOUTS);
+  return recentWorkouts.map((id) => {
+    const teams = new Map<string, string[]>();
+    for (const row of rows.filter((r) => r.workoutId === id)) {
+      teams.set(row.groupId, [...(teams.get(row.groupId) ?? []), row.playerId]);
+    }
+    return [...teams.values()];
+  });
 }
 
 /** Adds each player's recent attendance and groups, newest first, from workouts already played. */

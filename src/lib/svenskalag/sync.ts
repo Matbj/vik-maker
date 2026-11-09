@@ -54,7 +54,37 @@ export async function syncWorkouts(range: { from: Date; to: Date }) {
     attendanceRows += attendance.length;
   }
 
-  return { workouts: workouts.length, players: players.size, coaches: coaches.size, attendanceRows };
+  // After the attendance, so coaches seen for the first time get their email too.
+  const coachEmails = await syncCoachEmails(client);
+
+  return { workouts: workouts.length, players: players.size, coaches: coaches.size, attendanceRows, coachEmails };
+}
+
+/**
+ * Copies emails from svenskalag.se's contact list onto the coaches we know, matched by name.
+ * Someone no longer listed as a coach loses their email, and with it the ability to log in.
+ */
+export async function syncCoachEmails(client = new SvenskalagClient()) {
+  const db = getDb();
+  const { coaches } = schema;
+  const contacts = await client.fetchCoachContacts();
+  const emails = new Map(contacts.map((c) => [normalizeName(c.name), c.email]));
+
+  const known = await db.select({ id: coaches.id, name: coaches.name, email: coaches.email }).from(coaches);
+  let updated = 0;
+  for (const coach of known) {
+    const email = emails.get(normalizeName(coach.name)) ?? null;
+    if (email === coach.email) continue;
+    await db.update(coaches).set({ email }).where(eq(coaches.id, coach.id));
+    updated++;
+  }
+
+  const withEmail = known.filter((c) => emails.get(normalizeName(c.name))).length;
+  return { coaches: known.length, withEmail, updated, listedOnSvenskalag: contacts.length };
+}
+
+function normalizeName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 /** Re-reads one workout's attendance from svenskalag.se. */

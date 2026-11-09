@@ -35,6 +35,8 @@ export type ParsedResponse = {
   response: "attending" | "declined" | "unanswered";
 };
 
+export type ParsedCoachContact = { name: string; email: string | null };
+
 export type ParsedMember = { memberId: string; name: string; role: MemberRole };
 
 export type ParsedPresence = {
@@ -141,6 +143,35 @@ function quoteObjectKeys(literal: string) {
   return literal.replace(/"(?:[^"\\]|\\.)*"|([A-Za-z_]\w*)(?=:)/g, (match, key) =>
     key ? `"${key}"` : match,
   );
+}
+
+/**
+ * Coaches' names and emails from the contact list, which has no member ids.
+ * Reads only the "Ledare" section, so parents' contact details are never picked up.
+ */
+export function parseCoachContacts(html: string): ParsedCoachContact[] {
+  const heading = html.match(/>Ledare \((\d+)\)</);
+  if (!heading || heading.index === undefined) throw new SvenskalagParseError("no Ledare section in the contact list");
+
+  const start = heading.index;
+  const end = html.indexOf(">Spelare (", start);
+  if (end === -1) throw new SvenskalagParseError("no Spelare section after Ledare");
+
+  const contacts = html
+    .slice(start, end)
+    .split(/<tr[\s>]/)
+    .slice(1)
+    .flatMap((row) => {
+      const name = row.match(/<td colspan="2">\s*<span>\s*([^<]+)/)?.[1];
+      if (!name) return [];
+      const email = row.match(/href="mailto:([^"]+)"/)?.[1];
+      return [{ name: decodeHtml(name).trim(), email: email ? decodeHtml(email).trim().toLowerCase() : null }];
+    });
+
+  if (contacts.length !== Number(heading[1])) {
+    throw new SvenskalagParseError(`found ${contacts.length} coaches, expected ${heading[1]}`);
+  }
+  return contacts;
 }
 
 function decodeHtml(text: string) {

@@ -6,11 +6,13 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/", label: "Workouts" },
   { href: "/players", label: "Players" },
+  { href: "/settings", label: "Settings" },
 ] as const;
 
 /** Thumb-reachable tab bar on phones; sits at the bottom on all sizes for now. */
 export function BottomNav() {
   const pathname = usePathname();
+  if (pathname === "/login") return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-black/10 bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-white/10">
       <ul className="mx-auto flex max-w-3xl">

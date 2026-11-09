@@ -29,6 +29,27 @@
       "when": 1794261020421,
       "tag": "0003_flat_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794263534091,
+      "tag": "0004_reflective_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794264690605,
+      "tag": "0005_abandoned_thunderbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794265098614,
+      "tag": "0006_coach_login",
+      "breakpoints": true
     }
   ]
 }
