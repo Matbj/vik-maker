@@ -38,10 +38,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         <header className="sticky top-0 z-10 border-b-2 border-gold bg-brand pt-[env(safe-area-inset-top)] text-white">
           <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between gap-4 px-4">
-            <Image src={crest} alt="Vendelsö IK:s klubbmärke" height={40} loading="eager" />
             <Suspense>
               <PageTitle />
             </Suspense>
+            <Image src={crest} alt="Vendelsö IK:s klubbmärke" height={40} loading="eager" className="ml-auto shrink-0" />
           </div>
         </header>
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">{children}</main>
