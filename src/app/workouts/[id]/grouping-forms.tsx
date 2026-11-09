@@ -60,16 +60,35 @@ function useLinkedCounts(playerCount: number, initialCount: number, maxCount: nu
   };
 }
 
+function RefreshIcon({ spinning }: { spinning: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`size-4 ${spinning ? "animate-spin" : ""}`}
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36L21 8" />
+      <path d="M21 3v5h-5" />
+    </svg>
+  );
+}
+
 export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
   const [state, action, pending] = useActionState(refreshAttendance, {});
   return (
-    <form action={action} className="space-y-1">
+    <form action={action} className="flex shrink-0 flex-col items-end gap-1">
       <input type="hidden" name="workoutId" value={workoutId} />
       <button
         type="submit"
         disabled={pending}
-        className="whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
       >
+        <RefreshIcon spinning={pending} />
         {pending ? "Refreshing…" : "Refresh attendance"}
       </button>
       <FormError state={state} />

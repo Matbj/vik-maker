@@ -101,7 +101,10 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold">{workout.title}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="min-w-0 text-2xl font-semibold">{workout.title}</h1>
+          <RefreshAttendanceButton workoutId={id} />
+        </div>
         <p className="text-sm text-muted">
           {whenFormat.format(workout.startsAt)}
           {workout.location && ` · ${workout.location}`}
@@ -115,10 +118,7 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
           {coachAttendance.coaches.length > 0 &&
             `: ${coachAttendance.coaches.map((coach) => coach.name).join(", ")}`}
         </p>
-        <div className="mt-3 flex items-center gap-3">
-          <RefreshAttendanceButton workoutId={id} />
-          <span className="text-xs text-muted">Updated {whenFormat.format(workout.syncedAt)}</span>
-        </div>
+        <p className="mt-1 text-xs text-muted">Updated {whenFormat.format(workout.syncedAt)}</p>
       </header>
 
       {absentCount > 0 && (
