@@ -8,8 +8,8 @@ import { Notice } from "@/components/notice";
 export default function PlayersPage() {
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Players</h1>
-      <Suspense fallback={<p className="text-sm text-muted">Loading players…</p>}>
+      <h1 className="text-2xl font-semibold">Spelare</h1>
+      <Suspense fallback={<p className="text-sm text-muted">Laddar spelare…</p>}>
         <PlayerList />
       </Suspense>
     </section>
@@ -21,9 +21,9 @@ async function PlayerList() {
 
   if (!env.DATABASE_URL) {
     return (
-      <Notice title="Database not configured">
-        Add <code>DATABASE_URL</code> to <code>.env.local</code>, then run{" "}
-        <code>npm run db:migrate</code> and <code>npm run db:seed</code>.
+      <Notice title="Databasen är inte konfigurerad">
+        Lägg till <code>DATABASE_URL</code> i <code>.env.local</code> och kör sedan{" "}
+        <code>npm run db:migrate</code> och <code>npm run db:seed</code>.
       </Notice>
     );
   }
@@ -41,7 +41,7 @@ async function PlayerList() {
     .orderBy(asc(schema.levels.sortOrder), asc(schema.players.name));
 
   if (rows.length === 0) {
-    return <Notice title="No players yet">Players and their levels will be listed here.</Notice>;
+    return <Notice title="Inga spelare än">Spelarna och deras nivåer listas här.</Notice>;
   }
 
   return (

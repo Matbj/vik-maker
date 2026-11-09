@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
+import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
+import crest from "@/assets/vik-crest.png";
 import { BottomNav } from "@/components/bottom-nav";
 import { LogoutButton } from "@/components/logout-button";
 import "./globals.css";
@@ -16,8 +18,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vik Maker",
-  description: "Leveled training groups for the team, built from svenskalag.se bookings.",
+  title: "VIK Playmaker",
+  description: "Nivåanpassade träningsgrupper för laget, byggda från anmälningarna på svenskalag.se.",
 };
 
 export const viewport: Viewport = {
@@ -25,18 +27,21 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#0053a1" },
+    { media: "(prefers-color-scheme: dark)", color: "#004281" },
   ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="sv" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
-        <header className="sticky top-0 z-10 border-b border-black/10 bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur dark:border-white/10">
+        <header className="sticky top-0 z-10 border-b-2 border-gold bg-brand pt-[env(safe-area-inset-top)] text-white">
           <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-4">
-            <span className="text-lg font-semibold tracking-tight">Vik Maker</span>
+            <span className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+              <Image src={crest} alt="Vendelsö IK:s klubbmärke" height={40} loading="eager" />
+              VIK Playmaker
+            </span>
             <Suspense>
               <LogoutButton />
             </Suspense>

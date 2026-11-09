@@ -12,7 +12,7 @@ import {
 const inputClass =
   "w-16 rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-center dark:border-white/10";
 const buttonClass =
-  "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
+  "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50";
 
 function FormError({ state }: { state: GroupingState }) {
   if (!state.error) return null;
@@ -89,7 +89,7 @@ export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
         className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
       >
         <RefreshIcon spinning={pending} />
-        {pending ? "Refreshing…" : "Refresh attendance"}
+        {pending ? "Uppdaterar…" : "Uppdatera närvaro"}
       </button>
       <FormError state={state} />
     </form>
@@ -111,7 +111,7 @@ export function SpreadButton({
       <input type="hidden" name="workoutId" value={workoutId} />
       <input type="hidden" name="kind" value={kind} />
       <button type="submit" disabled={pending} className={buttonClass}>
-        {pending ? "Thinking…" : label}
+        {pending ? "Tänker…" : label}
       </button>
       <FormError state={state} />
     </form>
@@ -137,21 +137,21 @@ export function LevelGroupsForm({
       <input type="hidden" name="groupCount" value={count} />
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
-          Groups
+          Grupper
           <input type="number" min={1} className={inputClass} {...countInput} />
         </label>
         <label className="flex items-center gap-2 text-sm">
-          Players per group
+          Spelare per grupp
           <input type="number" min={1} className={inputClass} {...sizeInput} />
         </label>
         <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Thinking…" : hasGroups ? "Create new groups" : "Create groups"}
+          {pending ? "Tänker…" : hasGroups ? "Skapa nya grupper" : "Skapa grupper"}
         </button>
       </div>
       <p className="text-sm text-muted">
         {pending
-          ? "This takes a few seconds."
-          : `${count} ${count === 1 ? "group" : "groups"} of about ${smallest === largest ? smallest : `${smallest}–${largest}`} players`}
+          ? "Det tar några sekunder."
+          : `${count} ${count === 1 ? "grupp" : "grupper"} med cirka ${smallest === largest ? smallest : `${smallest}–${largest}`} spelare`}
       </p>
       <FormError state={state} />
     </form>
@@ -177,25 +177,25 @@ export function TeamsForm({
       <input type="hidden" name="teamCount" value={count} />
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
-          Teams
+          Lag
           <input type="number" min={1} className={inputClass} {...countInput} />
         </label>
         <label className="flex items-center gap-2 text-sm">
-          Players per team
+          Spelare per lag
           <input type="number" min={1} className={inputClass} {...sizeInput} />
         </label>
         {count >= 4 && (
           <label className="flex items-center gap-2 text-sm">
             <input name="twoLeagues" type="checkbox" />
-            Two leagues
+            Två serier
           </label>
         )}
         <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Thinking…" : hasTeams ? "Create new teams" : "Create teams"}
+          {pending ? "Tänker…" : hasTeams ? "Skapa nya lag" : "Skapa lag"}
         </button>
       </div>
       <p className="text-sm text-muted">
-        {count} {count === 1 ? "team" : "teams"} of {smallest === largest ? smallest : `${smallest}–${largest}`} players
+        {count} lag med {smallest === largest ? smallest : `${smallest}–${largest}`} spelare
       </p>
       <FormError state={state} />
     </form>

@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Vik Maker
+# VIK Playmaker
 
 A mobile-first tool for the coaches of a youth football team (`vendelsoik-p10` on svenskalag.se). It syncs workouts and attendance from svenskalag.se and builds leveled training groups and teams from each player's level (A, B1, B2, C).
 
@@ -21,7 +21,11 @@ This file describes the app as it is now. When a change affects anything below (
 - All code is in English: identifiers, comments, database names, AI prompts, commit messages and docs.
 - Everything users see is in Swedish: page text, buttons, form and error messages that reach the UI (including those thrown in `src/lib/`), page metadata, the login email and `<html lang>`.
 - Data keeps its own language, such as svenskalag.se titles and the group names.
-- **Not applied yet:** the UI is still in English. The translation is its own change, to be done after PR #6 merges, so don't translate piecemeal in other work. Remove this bullet once it's done.
+- Use the words coaches know from svenskalag.se and football: workout is "träning", coach is "ledare", team is "lag", league is "serie".
+
+## Branding
+
+The app is called VIK Playmaker, for Vendelsö IK. Colors come from the club's crest, blue `#0053a1` and yellow `#ffd100`, and are defined as theme tokens in `src/app/globals.css`. Use `bg-accent` with `text-on-accent`, as the accent is blue in light mode and yellow in dark mode. The crest is `src/assets/vik-crest.png`, with `src/app/icon.png` and `src/app/apple-icon.png` as icons. `src/proxy.ts` must keep letting the icons through without a login.
 
 ## Standing rules
 
@@ -67,6 +71,7 @@ Defined in `src/db/schema.ts`: `levels`, `players`, `coaches`, `workouts`, `work
 - Mutations are Server Actions in an `actions.ts` next to the route, validated with Zod, used through `useActionState` and followed by `revalidatePath`.
 - Server code that touches secrets imports `server-only`, and env vars go through `src/lib/env.ts`.
 - Add new env vars to `.env.example` too.
+- Only messages from a `UserError` (`src/lib/errors.ts`) are shown to coaches. Other errors are logged and replaced by a general Swedish message.
 
 ## Database and deployment
 

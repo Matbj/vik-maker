@@ -1,10 +1,14 @@
 @import "tailwindcss";
 
+/* Vendelsö IK's crest colors: blue #0053a1 and yellow #ffd100. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --muted: #6b7280;
-  --accent: #15803d;
+  --background: #f7fafd;
+  --foreground: #0f2238;
+  --muted: #5a6b7d;
+  --accent: #0053a1;
+  --on-accent: #ffffff;
+  --brand: #0053a1;
+  --gold: #ffd100;
 }
 
 @theme inline {
@@ -12,16 +16,21 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-brand: var(--brand);
+  --color-gold: var(--gold);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --muted: #9ca3af;
-    --accent: #4ade80;
+    --background: #081423;
+    --foreground: #e8eef5;
+    --muted: #9db0c4;
+    --accent: #ffd100;
+    --on-accent: #08264a;
+    --brand: #004281;
   }
 }
 

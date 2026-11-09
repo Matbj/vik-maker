@@ -45,7 +45,7 @@ export async function loadWorkoutPlayers(workoutId: string, levelOrder: string[]
       rows
         .filter((row) => !pool.has(row.id))
         .map((row) => {
-          const reason = registered ? "Absent" : row.playerResponse === "declined" ? "Declined" : "No answer";
+          const reason = registered ? "Frånvarande" : row.playerResponse === "declined" ? "Kan ej" : "Inget svar";
           return [row.id, reason] as const;
         }),
     ),

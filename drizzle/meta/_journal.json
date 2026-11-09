@@ -50,6 +50,13 @@
       "when": 1794265098614,
       "tag": "0006_coach_login",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794266451316,
+      "tag": "0007_swedish_team_names",
+      "breakpoints": true
     }
   ]
 }

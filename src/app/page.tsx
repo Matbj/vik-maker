@@ -23,8 +23,8 @@ const timeFormat = new Intl.DateTimeFormat("sv-SE", {
 export default function WorkoutsPage() {
   return (
     <section className="space-y-4">
-      <h1 className="text-2xl font-semibold">Upcoming workouts</h1>
-      <Suspense fallback={<p className="text-sm text-muted">Loading workouts…</p>}>
+      <h1 className="text-2xl font-semibold">Kommande träningar</h1>
+      <Suspense fallback={<p className="text-sm text-muted">Laddar träningar…</p>}>
         <WorkoutLists />
       </Suspense>
     </section>
@@ -65,9 +65,9 @@ async function WorkoutLists() {
 
   if (!env.DATABASE_URL) {
     return (
-      <Notice title="Database not configured">
-        Add <code>DATABASE_URL</code> to <code>.env.local</code>, then run{" "}
-        <code>npm run db:migrate</code> and <code>npm run db:seed</code>.
+      <Notice title="Databasen är inte konfigurerad">
+        Lägg till <code>DATABASE_URL</code> i <code>.env.local</code> och kör sedan{" "}
+        <code>npm run db:migrate</code> och <code>npm run db:seed</code>.
       </Notice>
     );
   }
@@ -82,13 +82,13 @@ async function WorkoutLists() {
       {upcoming.length > 0 ? (
         <WorkoutList workouts={upcoming} />
       ) : (
-        <Notice title="No upcoming workouts">
-          Workouts appear here after a sync from svenskalag.se.
+        <Notice title="Inga kommande träningar">
+          Träningarna visas här efter en synkning från svenskalag.se.
         </Notice>
       )}
       {recent.length > 0 && (
         <>
-          <h2 className="pt-2 text-lg font-semibold">Recent workouts</h2>
+          <h2 className="pt-2 text-lg font-semibold">Senaste träningarna</h2>
           <WorkoutList workouts={recent} />
         </>
       )}
@@ -115,20 +115,20 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
               </p>
               {registered && (
                 <p className="text-xs text-muted">
-                  Responses: {w.attending} yes · {w.declined} no · {w.unanswered} no answer
+                  Svar: {w.attending} ja · {w.declined} nej · {w.unanswered} inget svar
                 </p>
               )}
             </div>
             <div className="flex shrink-0 gap-3 text-center text-xs text-muted">
               {registered ? (
                 <>
-                  <Count label="Present" value={w.present} />
-                  <Count label="Absent" value={w.absent} />
+                  <Count label="Närv." value={w.present} />
+                  <Count label="Frånv." value={w.absent} />
                 </>
               ) : (
                 <>
-                  <Count label="Yes" value={w.attending} />
-                  <Count label="No" value={w.declined} />
+                  <Count label="Ja" value={w.attending} />
+                  <Count label="Nej" value={w.declined} />
                   <Count label="?" value={w.unanswered} />
                 </>
               )}

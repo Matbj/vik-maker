@@ -15,8 +15,8 @@ export async function addSeparation(
   formData: FormData,
 ): Promise<SettingsState> {
   const form = pairForm.safeParse(Object.fromEntries(formData));
-  if (!form.success) return { error: "Choose two players." };
-  if (form.data.playerA === form.data.playerB) return { error: "Choose two different players." };
+  if (!form.success) return { error: "Välj två spelare." };
+  if (form.data.playerA === form.data.playerB) return { error: "Välj två olika spelare." };
 
   const [playerAId, playerBId] = [form.data.playerA, form.data.playerB].sort();
   await getDb()
@@ -49,7 +49,7 @@ export async function saveGroupingNotes(
   formData: FormData,
 ): Promise<SettingsState> {
   const value = z.string().max(2000).safeParse(formData.get("notes"));
-  if (!value.success) return { error: "Keep the notes under 2000 characters." };
+  if (!value.success) return { error: "Anteckningarna får vara högst 2000 tecken." };
 
   await getDb()
     .insert(schema.appSettings)

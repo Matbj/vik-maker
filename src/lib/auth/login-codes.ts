@@ -79,8 +79,8 @@ async function emailCode(to: string, code: string) {
     body: JSON.stringify({
       from: env.RESEND_FROM,
       to,
-      subject: `Your Vik Maker code: ${code}`,
-      text: `Your login code is ${code}\n\nIt works for 10 minutes. If you didn't ask for it, you can ignore this email.`,
+      subject: `Din kod till VIK Playmaker: ${code}`,
+      text: `Din inloggningskod är ${code}\n\nDen gäller i 10 minuter. Om du inte har bett om den kan du ignorera det här mejlet.`,
     }),
   });
   if (!response.ok) throw new Error(`Resend returned ${response.status}: ${await response.text()}`);

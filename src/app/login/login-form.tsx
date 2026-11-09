@@ -7,7 +7,7 @@ import { login, type LoginState } from "./actions";
 const fieldClass =
   "w-full rounded-lg border border-black/10 bg-transparent px-3 py-3 text-base dark:border-white/10";
 const buttonClass =
-  "w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-white disabled:opacity-50";
+  "w-full rounded-lg bg-accent px-4 py-3 text-sm font-semibold text-on-accent disabled:opacity-50";
 const linkClass = "text-sm font-medium text-accent disabled:opacity-50";
 
 const initialState: LoginState = { step: "email" };
@@ -21,7 +21,7 @@ export function LoginForm() {
       <form action={action} className="space-y-3">
         <input type="hidden" name="intent" value="send" />
         <label className="block space-y-1">
-          <span className="text-sm font-medium">Email</span>
+          <span className="text-sm font-medium">E-post</span>
           <input
             name="email"
             type="email"
@@ -33,7 +33,7 @@ export function LoginForm() {
           />
         </label>
         <button type="submit" disabled={pending} className={buttonClass}>
-          Email me a code
+          Mejla mig en kod
         </button>
         <Error message={state.error} />
       </form>
@@ -48,7 +48,7 @@ export function LoginForm() {
       {!state.codeExpired && (
         <>
           <label className="block space-y-1">
-            <span className="text-sm font-medium">Code</span>
+            <span className="text-sm font-medium">Kod</span>
             <input
               name="code"
               required
@@ -62,17 +62,17 @@ export function LoginForm() {
             />
           </label>
           <button type="submit" name="intent" value="verify" disabled={pending} className={buttonClass}>
-            Log in
+            Logga in
           </button>
         </>
       )}
       <Error message={state.error} />
       <div className="flex justify-between gap-4">
         <button type="submit" name="intent" value="send" formNoValidate disabled={pending} className={linkClass}>
-          Send a new code
+          Skicka en ny kod
         </button>
         <button type="submit" name="intent" value="restart" formNoValidate disabled={pending} className={linkClass}>
-          Use another email
+          Använd en annan e-postadress
         </button>
       </div>
     </form>

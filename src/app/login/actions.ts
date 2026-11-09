@@ -14,7 +14,7 @@ export type LoginState = {
   codeExpired?: boolean;
 };
 
-const SENT_MESSAGE = "If that address belongs to a coach on svenskalag.se, a code is on its way.";
+const SENT_MESSAGE = "Om adressen tillhör en ledare på svenskalag.se är en kod på väg.";
 
 /** Only ever send people back to a page of this app. */
 function safeNext(next: FormDataEntryValue | null) {
@@ -26,24 +26,24 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   const email = z.email().safeParse(String(formData.get("email") ?? "").trim());
 
   if (intent === "restart") return { step: "email" };
-  if (!email.success) return { step: "email", error: "Enter a valid email address." };
+  if (!email.success) return { step: "email", error: "Ange en giltig e-postadress." };
 
   if (intent === "send") {
     try {
       await sendLoginCode(email.data);
     } catch (error) {
       console.error("sending a login code failed:", error);
-      return { step: "email", email: email.data, error: "The email couldn't be sent. Try again in a moment." };
+      return { step: "email", email: email.data, error: "Mejlet kunde inte skickas. Försök igen om en liten stund." };
     }
     return { step: "code", email: email.data, message: SENT_MESSAGE };
   }
 
   const result = await checkLoginCode(email.data, String(formData.get("code") ?? ""));
   if (result.status === "wrong") {
-    return { step: "code", email: email.data, error: "That code isn't right. Three wrong tries uses it up." };
+    return { step: "code", email: email.data, error: "Koden stämmer inte. Efter tre felaktiga försök slutar den att gälla." };
   }
   if (result.status === "invalid") {
-    return { step: "code", email: email.data, codeExpired: true, error: "This code no longer works. Send a new one." };
+    return { step: "code", email: email.data, codeExpired: true, error: "Koden gäller inte längre. Skicka en ny." };
   }
 
   await startSession(result.coachId);

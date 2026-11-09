@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { requireEnv } from "@/lib/env";
+import { UserError } from "@/lib/errors";
 import {
   findGroupingProblems,
   findSizeProblems,
@@ -95,7 +96,7 @@ async function askClaude<T>(
     });
 
     if (response.stop_reason === "refusal" || !response.parsed_output) {
-      throw new Error("The result couldn't be used. Please try again.");
+      throw new UserError("Resultatet gick inte att använda. Försök igen.");
     }
 
     const rules = findProblems(response.parsed_output);
@@ -107,7 +108,7 @@ async function askClaude<T>(
     feedback = `\n\nA previous attempt was rejected. Fix these problems:\n${problems.join("\n")}`;
   }
 
-  throw new Error("The result kept breaking the rules. Please try again.");
+  throw new UserError("Resultatet bröt mot reglerna flera gånger. Försök igen.");
 }
 
 type Preferences = { keepApart: PlayerPair[]; notes: string };
