@@ -12,6 +12,7 @@ const schema = z.object({
   SVENSKALAG_USERNAME: z.string().optional(),
   SVENSKALAG_PASSWORD: z.string().optional(),
   CRON_SECRET: z.string().optional(),
+  CLAUDE_API_KEY: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

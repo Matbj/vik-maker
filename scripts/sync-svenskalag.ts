@@ -15,15 +15,18 @@ async function main() {
 
   const client = new SvenskalagClient();
   for (const workout of await client.fetchWorkouts(range)) {
-    const attendance = await client.fetchAttendance(workout.id);
+    const everyone = await client.fetchAttendance(workout.id);
+    const attendance = everyone.filter((a) => a.role === "player");
     const count = (test: (a: (typeof attendance)[number]) => boolean) => attendance.filter(test).length;
     console.log(workout.startsAt.toISOString(), workout.id, workout.title, workout.location ?? "-", {
-      attending: count((a) => a.playerResponse === "attending"),
-      declined: count((a) => a.playerResponse === "declined"),
-      unanswered: count((a) => a.playerResponse === "unanswered"),
+      attending: count((a) => a.response === "attending"),
+      declined: count((a) => a.response === "declined"),
+      unanswered: count((a) => a.response === "unanswered"),
       present: count((a) => a.coachCheck === "present"),
       absent: count((a) => a.coachCheck === "absent"),
       unchecked: count((a) => a.coachCheck === null),
+      coaches: everyone.length - attendance.length,
+      coachesPresent: everyone.filter((a) => a.role === "coach" && a.coachCheck === "present").length,
     });
   }
 }

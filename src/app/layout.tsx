@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { BottomNav } from "@/components/bottom-nav";
@@ -37,8 +38,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <span className="text-lg font-semibold tracking-tight">Vik Maker</span>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-4 pb-24 md:pb-8">{children}</main>
-        <BottomNav />
+        <main className="mx-auto w-full max-w-3xl flex-1 px-4 pt-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">{children}</main>
+        <Suspense>
+          <BottomNav />
+        </Suspense>
       </body>
     </html>
   );
