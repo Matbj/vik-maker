@@ -78,6 +78,40 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
   );
 }
 
+/** The current groups or teams, blurred from when new ones are requested until they arrive. */
+function ReplaceableCards({
+  replacing,
+  label,
+  children,
+}: {
+  replacing: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <div
+        aria-busy={replacing}
+        inert={replacing}
+        className={`grid gap-3 transition-[filter] sm:grid-cols-2 ${replacing ? "select-none blur-sm" : ""}`}
+      >
+        {children}
+      </div>
+      {replacing && (
+        <div className="absolute inset-0 flex justify-center pt-6">
+          <p
+            role="status"
+            className="sticky top-20 flex h-fit items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent shadow-lg"
+          >
+            <RefreshIcon spinning />
+            {label}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
   const [state, action, pending] = useActionState(refreshAttendance, {});
   return (
@@ -123,38 +157,45 @@ export function LevelGroupsForm({
   playerCount,
   initialCount,
   hasGroups,
+  children,
 }: {
   workoutId: string;
   playerCount: number;
   initialCount: number;
   hasGroups: boolean;
+  children: React.ReactNode;
 }) {
   const [state, action, pending] = useActionState(createLevelGroups, {});
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 12);
   return (
-    <form action={action} className="space-y-2">
-      <input type="hidden" name="workoutId" value={workoutId} />
-      <input type="hidden" name="groupCount" value={count} />
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm">
-          Grupper
-          <input type="number" min={1} className={inputClass} {...countInput} />
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          Spelare per grupp
-          <input type="number" min={1} className={inputClass} {...sizeInput} />
-        </label>
-        <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Tänker…" : hasGroups ? "Skapa nya grupper" : "Skapa grupper"}
-        </button>
-      </div>
-      <p className="text-sm text-muted">
-        {pending
-          ? "Det tar några sekunder."
-          : `${count} ${count === 1 ? "grupp" : "grupper"} med cirka ${smallest === largest ? smallest : `${smallest}–${largest}`} spelare`}
-      </p>
-      <FormError state={state} />
-    </form>
+    <>
+      <form action={action} className="space-y-2">
+        <input type="hidden" name="workoutId" value={workoutId} />
+        <input type="hidden" name="groupCount" value={count} />
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            Grupper
+            <input type="number" min={1} className={inputClass} {...countInput} />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            Spelare per grupp
+            <input type="number" min={1} className={inputClass} {...sizeInput} />
+          </label>
+          <button type="submit" disabled={pending} className={buttonClass}>
+            {pending ? "Tänker…" : hasGroups ? "Skapa nya grupper" : "Skapa grupper"}
+          </button>
+        </div>
+        <p className="text-sm text-muted">
+          {pending
+            ? "Det tar några sekunder."
+            : `${count} ${count === 1 ? "grupp" : "grupper"} med cirka ${smallest === largest ? smallest : `${smallest}–${largest}`} spelare`}
+        </p>
+        <FormError state={state} />
+      </form>
+      <ReplaceableCards replacing={pending && hasGroups} label="Skapar nya grupper…">
+        {children}
+      </ReplaceableCards>
+    </>
   );
 }
 
@@ -164,48 +205,55 @@ export function TeamsForm({
   initialCount,
   hasTeams,
   hasLevelGroups,
+  children,
 }: {
   workoutId: string;
   playerCount: number;
   initialCount: number;
   hasTeams: boolean;
   hasLevelGroups: boolean;
+  children: React.ReactNode;
 }) {
   const [state, action, pending] = useActionState(createTeams, {});
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 16);
   return (
-    <form action={action} className="space-y-2">
-      <input type="hidden" name="workoutId" value={workoutId} />
-      <input type="hidden" name="teamCount" value={count} />
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm">
-          Lag
-          <input type="number" min={1} className={inputClass} {...countInput} />
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          Spelare per lag
-          <input type="number" min={1} className={inputClass} {...sizeInput} />
-        </label>
-        {count >= 4 && (
+    <>
+      <form action={action} className="space-y-2">
+        <input type="hidden" name="workoutId" value={workoutId} />
+        <input type="hidden" name="teamCount" value={count} />
+        <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm">
-            <input name="twoLeagues" type="checkbox" />
-            Två serier
+            Lag
+            <input type="number" min={1} className={inputClass} {...countInput} />
           </label>
-        )}
-        {hasLevelGroups && (
           <label className="flex items-center gap-2 text-sm">
-            <input name="keepGroups" type="checkbox" />
-            Behåll nivågrupperna så långt det går
+            Spelare per lag
+            <input type="number" min={1} className={inputClass} {...sizeInput} />
           </label>
-        )}
-        <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Tänker…" : hasTeams ? "Skapa nya lag" : "Skapa lag"}
-        </button>
-      </div>
-      <p className="text-sm text-muted">
-        {count} lag med {smallest === largest ? smallest : `${smallest}–${largest}`} spelare
-      </p>
-      <FormError state={state} />
-    </form>
+          {count >= 4 && (
+            <label className="flex items-center gap-2 text-sm">
+              <input name="twoLeagues" type="checkbox" />
+              Två serier
+            </label>
+          )}
+          {hasLevelGroups && (
+            <label className="flex items-center gap-2 text-sm">
+              <input name="keepGroups" type="checkbox" />
+              Behåll nivågrupperna så långt det går
+            </label>
+          )}
+          <button type="submit" disabled={pending} className={buttonClass}>
+            {pending ? "Tänker…" : hasTeams ? "Skapa nya lag" : "Skapa lag"}
+          </button>
+        </div>
+        <p className="text-sm text-muted">
+          {count} lag med {smallest === largest ? smallest : `${smallest}–${largest}`} spelare
+        </p>
+        <FormError state={state} />
+      </form>
+      <ReplaceableCards replacing={pending && hasTeams} label="Skapar nya lag…">
+        {children}
+      </ReplaceableCards>
+    </>
   );
 }

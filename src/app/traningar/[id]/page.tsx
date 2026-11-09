@@ -158,8 +158,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
           playerCount={players.length}
           initialCount={levelGroups.length || Math.round(players.length / DEFAULT_PLAYERS_PER_GROUP)}
           hasGroups={levelGroups.length > 0}
-        />
-        <div className="grid gap-3 sm:grid-cols-2">
+        >
           {levelGroups.map((group) => (
             <GroupCard
               key={group.id}
@@ -188,7 +187,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
               })}
             </GroupCard>
           ))}
-        </div>
+        </LevelGroupsForm>
       </div>
 
       <div className="space-y-3">
@@ -199,8 +198,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
           initialCount={teams.length || Math.round(players.length / DEFAULT_PLAYERS_PER_TEAM)}
           hasTeams={teams.length > 0}
           hasLevelGroups={levelGroups.length > 0}
-        />
-        <div className="grid gap-3 sm:grid-cols-2">
+        >
           {teams.map((team) => (
             <GroupCard
               key={team.id}
@@ -219,7 +217,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
               ))}
             </GroupCard>
           ))}
-        </div>
+        </TeamsForm>
       </div>
     </div>
   );
