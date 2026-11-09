@@ -45,6 +45,30 @@ export async function loadWorkoutPlayers(workoutId: string, levelOrder: string[]
   };
 }
 
+/** Coaches at a workout: the attendance check once it's registered, until then whoever said yes. */
+export async function loadWorkoutCoaches(workoutId: string) {
+  const { coaches, workoutCoachAttendance } = schema;
+  const rows = await getDb()
+    .select({
+      id: coaches.id,
+      name: coaches.name,
+      response: workoutCoachAttendance.response,
+      coachCheck: workoutCoachAttendance.coachCheck,
+    })
+    .from(workoutCoachAttendance)
+    .innerJoin(coaches, eq(coaches.id, workoutCoachAttendance.coachId))
+    .where(eq(workoutCoachAttendance.workoutId, workoutId))
+    .orderBy(asc(coaches.name));
+
+  const registered = rows.some((row) => row.coachCheck !== null);
+  return {
+    registered,
+    coaches: rows.filter((row) =>
+      registered ? row.coachCheck === "present" : row.response === "attending",
+    ),
+  };
+}
+
 /** Adds each player's recent attendance and groups, newest first, from workouts already played. */
 export async function withHistory(
   players: WorkoutPlayer[],

@@ -59,6 +59,7 @@ scripts/seed.ts           seeds levels
 - **players**: name, svenskalag id, level
 - **workouts**: synced from svenskalag.se, keyed on svenskalag's id
 - **workout_attendance**: per workout and player, `player_response` (what the player answered) and `coach_check` (the coaches' attendance check, empty until registered)
+- **coaches** + **workout_coach_attendance**: the team's leaders from svenskalag.se and their attendance, kept apart from the players
 - **workout_groups** + **workout_group_members**: the generated leveled groups and teams for a workout, kept until a coach creates new ones
 
 ## Groups and teams

@@ -1,7 +1,7 @@
 import type { SvenskalagWorkout } from "./types";
 
-/** svenskalag's member type for players (others are leaders, guardians, ...). */
-const PLAYER_MEMBER_TYPE = 1;
+/** svenskalag's member types we track. Others are guardians, volunteers and so on. */
+const MEMBER_ROLES: Record<number, MemberRole> = { 1: "player", 2: "coach" };
 
 const MONTHS = [
   "januari",
@@ -26,18 +26,21 @@ export class SvenskalagParseError extends Error {
   }
 }
 
+export type MemberRole = "player" | "coach";
+
 export type ParsedResponse = {
   memberId: string;
   name: string;
+  role: MemberRole;
   response: "attending" | "declined" | "unanswered";
 };
 
-export type ParsedMember = { memberId: string; name: string };
+export type ParsedMember = { memberId: string; name: string; role: MemberRole };
 
 export type ParsedPresence = {
-  /** False until the coaches have registered anyone (players or leaders) as present. */
+  /** False until the coaches have registered anyone as present. */
   registered: boolean;
-  players: ParsedMember[];
+  members: ParsedMember[];
 };
 
 export function calendarMonthPath(date: Date) {
@@ -77,7 +80,7 @@ export function parseCalendarMonth(
   return workouts;
 }
 
-/** Players' answers from a logged-in activity page. */
+/** Players' and coaches' answers from a logged-in activity page. */
 export function parseResponses(html: string): ParsedResponse[] {
   assertLoggedIn(html);
 
@@ -99,8 +102,9 @@ export function parseResponses(html: string): ParsedResponse[] {
     return [...rows].flatMap(([, memberId, row]) => {
       const member = row.match(/memberTypeId="(\d+)" name="([^"]*)"/);
       if (!member) throw new SvenskalagParseError("attendance row without member details");
-      if (Number(member[1]) !== PLAYER_MEMBER_TYPE) return [];
-      return [{ memberId, name: decodeHtml(member[2]), response: pane.response }];
+      const role = MEMBER_ROLES[Number(member[1])];
+      if (!role) return [];
+      return [{ memberId, name: decodeHtml(member[2]), role, response: pane.response }];
     });
   });
 }
@@ -121,9 +125,10 @@ export function parsePresence(html: string): ParsedPresence {
   const members = groups.flatMap((g) => [...(g.leaders ?? []), ...(g.participants ?? [])]);
   return {
     registered: members.length > 0,
-    players: members
-      .filter((m) => m.memberTypeId === PLAYER_MEMBER_TYPE)
-      .map((m) => ({ memberId: String(m.id), name: m.fullName })),
+    members: members.flatMap((m) => {
+      const role = MEMBER_ROLES[m.memberTypeId];
+      return role ? [{ memberId: String(m.id), name: m.fullName, role }] : [];
+    }),
   };
 }
 

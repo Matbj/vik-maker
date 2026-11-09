@@ -6,7 +6,11 @@ import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { levelMove } from "@/lib/grouping/level-groups";
-import { loadLevelOrder, loadWorkoutPlayers } from "@/lib/grouping/workout-players";
+import {
+  loadLevelOrder,
+  loadWorkoutCoaches,
+  loadWorkoutPlayers,
+} from "@/lib/grouping/workout-players";
 import { LevelGroupsForm, TeamsForm } from "./grouping-forms";
 
 // Claude can take a while to compute leveled groups.
@@ -44,8 +48,9 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
   if (!workout) notFound();
 
   const levelOrder = await loadLevelOrder();
-  const [{ players, registered }, groupRows, memberRows] = await Promise.all([
+  const [{ players, registered }, coachAttendance, groupRows, memberRows] = await Promise.all([
     loadWorkoutPlayers(id, levelOrder),
+    loadWorkoutCoaches(id),
     db
       .select()
       .from(schema.workoutGroups)
@@ -84,6 +89,12 @@ async function Workout({ params }: { params: PageProps<"/workouts/[id]">["params
         </p>
         <p className="mt-1 text-sm text-muted">
           {players.length} {registered ? "players present" : "players attending"}
+        </p>
+        <p className="text-sm text-muted">
+          {coachAttendance.coaches.length}{" "}
+          {coachAttendance.registered ? "coaches present" : "coaches attending"}
+          {coachAttendance.coaches.length > 0 &&
+            `: ${coachAttendance.coaches.map((coach) => coach.name).join(", ")}`}
         </p>
       </header>
 
