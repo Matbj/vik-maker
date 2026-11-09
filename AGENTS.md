@@ -46,7 +46,7 @@ Next.js 16 (App Router, Cache Components), React 19, TypeScript, Tailwind CSS v4
 | --- | --- |
 | `/` | Workouts |
 | `/workouts/[id]` | One workout: attendance, leveled groups, teams, spreading new players |
-| `/players` | Active players and their levels |
+| `/players` | "Laget": the coaches with phone numbers, then active players and their levels |
 | `/settings` | Keep-apart pairs and free-text grouping notes |
 | `/login` | Email code login for coaches |
 | `/api/cron/sync-svenskalag` | Daily sync at 14:00 UTC, protected by `CRON_SECRET` |
@@ -55,7 +55,7 @@ Next.js 16 (App Router, Cache Components), React 19, TypeScript, Tailwind CSS v4
 
 ## How it works
 
-- **Sync** (`src/lib/svenskalag/`): logs in with a coach's own account and parses the pages, as there is no public API. It covers the last 14 days and the next 28, and a page that looks wrong fails the sync instead of overwriting data. It never changes a player's level or active flag. Coach emails come from the "Ledare" section of the contact list. Workouts removed from svenskalag.se aren't deleted here yet.
+- **Sync** (`src/lib/svenskalag/`): logs in with a coach's own account and parses the pages, as there is no public API. It covers the last 14 days and the next 28, and a page that looks wrong fails the sync instead of overwriting data. It never changes a player's level or active flag. Coach emails and phone numbers come from the "Ledare" section of the contact list, and only coaches' numbers are stored. Workouts removed from svenskalag.se aren't deleted here yet.
 - **Attendance**: `player_response` is what the player answered, and `coach_check` is the coaches' own check, empty until registered. The check wins once it exists.
 - **Groups and teams** (`src/lib/grouping/`): the AI proposes them, and pure functions in `level-groups.ts` and `teams.ts` validate the answer, with up to three attempts. Nobody moves more than one level from their home level. Keep-apart pairs get the same retries, but the last answer is accepted if it only misses those. Groups are named after Greek or Norse gods, starting with the letter of the group's strongest level. When a workout has leveled groups, a checkbox on the team form asks the AI to keep the teams as close to those groups as possible, which then comes before even strength between teams from different groups.
 - **Persistence**: groups stay per workout and kind until a coach creates new ones. Players who stop coming stay in their group and are marked, and new players are listed separately so they can be spread into the existing groups.

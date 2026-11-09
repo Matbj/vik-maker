@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const items = [
   { href: "/", label: "Träningar" },
-  { href: "/players", label: "Spelare" },
+  { href: "/players", label: "Laget" },
   { href: "/settings", label: "Inställningar" },
 ] as const;
 
