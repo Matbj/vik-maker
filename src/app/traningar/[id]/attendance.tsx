@@ -51,12 +51,13 @@ export function StartWorkoutButton({
 
 /**
  * Tells the coaches that the attendance is filled in here, and whether svenskalag.se has it.
- * Also asks for a save that has been waiting too long, as the function that should have made
- * it can have been stopped.
+ * A tinted strip with a dot, to stand apart from the cards of people below it. Also asks for
+ * a save that has been waiting too long, as the function that should have made it can have
+ * been stopped.
  */
 export function LiveBanner({
   workoutId,
-  title,
+  ongoing,
   savesToSvenskalag,
   version,
   pushedVersion,
@@ -64,7 +65,8 @@ export function LiveBanner({
   error,
 }: {
   workoutId: string;
-  title: string;
+  /** Whether the workout is on now, and not one that is filled in afterwards. */
+  ongoing: boolean;
   savesToSvenskalag: boolean;
   version: number;
   pushedVersion: number;
@@ -85,22 +87,38 @@ export function LiveBanner({
   }, [waiting, workoutId, version]);
 
   return (
-    <div role="status" className="space-y-2 rounded-xl border-2 border-accent p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 className="font-semibold">{title}</h2>
-        <p className="text-sm text-muted">
-          {!savesToSvenskalag
-            ? "Sparas inte i svenskalag.se"
-            : error
-              ? null
-              : waiting
-                ? "Sparar i svenskalag.se…"
-                : pushedAt
-                  ? `Sparat i svenskalag.se ${pushedAt}`
-                  : null}
-        </p>
+    <div role="status" className="space-y-2 rounded-lg bg-accent/10 px-3 py-2.5">
+      <div className="flex gap-2.5">
+        <span aria-hidden="true" className="relative mt-1.5 flex size-2.5 shrink-0">
+          {ongoing && (
+            <span className="absolute inline-flex size-full rounded-full bg-accent opacity-60 motion-safe:animate-ping" />
+          )}
+          <span className="relative inline-flex size-2.5 rounded-full bg-accent" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <p className="text-sm font-semibold">{ongoing ? "Träningen pågår" : "Närvaron fylls i här"}</p>
+            <p className="flex items-center gap-1.5 text-xs text-muted">
+              {waiting && (
+                <span
+                  aria-hidden="true"
+                  className="size-3 animate-spin rounded-full border-2 border-accent/25 border-t-accent"
+                />
+              )}
+              {!savesToSvenskalag
+                ? "Sparas inte i svenskalag.se"
+                : error
+                  ? null
+                  : waiting
+                    ? "Sparar i svenskalag.se…"
+                    : pushedAt
+                      ? `Sparat i svenskalag.se ${pushedAt}`
+                      : null}
+            </p>
+          </div>
+          <p className="text-xs text-muted">Bocka i de som är här. Alla ledare ser ändringarna direkt.</p>
+        </div>
       </div>
-      <p className="text-sm text-muted">Bocka i de som är här. Alla ledare ser ändringarna direkt.</p>
       {error && (
         <div className="space-y-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400">
           <p>{error}</p>

@@ -203,7 +203,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
         <div className="space-y-3">
           <LiveBanner
             workoutId={id}
-            title={ended ? "Närvaron fylls i här" : "Träningen pågår"}
+            ongoing={!ended}
             savesToSvenskalag={savesToSvenskalag}
             version={workout.presenceVersion}
             pushedVersion={workout.presencePushedVersion}
