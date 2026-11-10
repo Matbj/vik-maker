@@ -134,31 +134,72 @@ function AttendanceCard({ title, count, children }: { title: string; count: numb
   );
 }
 
-/** The coaches at a started workout, each with their check. Folded, as the players come first. */
-export function CoachAttendance({ coaches }: { coaches: { id: string; name: string }[] }) {
+export type CoachRow = {
+  id: string;
+  name: string;
+  /** What they answered. Null for a coach who wasn't asked to this workout. */
+  answer: "attending" | "declined" | "unanswered" | null;
+  /** Whether they count as there on the page's own data: checked off, or until then said yes. */
+  present: boolean;
+};
+
+const COACH_ANSWERS = {
+  attending: { label: "Kommer", order: 0, className: "" },
+  unanswered: { label: "Inget svar", order: 1, className: "text-muted" },
+  declined: { label: "Kan ej", order: 2, className: "text-red-700 dark:text-red-400" },
+  none: { label: "Ej kallad", order: 3, className: "text-muted" },
+} as const;
+
+/**
+ * The workout's coaches with what each of them answered. Folded, as the players come first.
+ * At a started workout each coach also has their check. `checked` says whether who is there
+ * comes from an attendance check, and not only from the answers.
+ */
+export function CoachAttendance({ coaches, checked }: { coaches: CoachRow[]; checked: boolean }) {
   const attendance = useAttendance();
-  if (!attendance || coaches.length === 0) return null;
-  const present = coaches.filter((coach) => attendance.isPresent("coach", coach.id));
+  if (coaches.length === 0) return null;
+
+  const isHere = (coach: CoachRow) => (attendance ? attendance.isPresent("coach", coach.id) : coach.present);
+  const answerOf = (coach: CoachRow) => COACH_ANSWERS[coach.answer ?? "none"];
+  const rows = [...coaches].sort((a, b) => answerOf(a).order - answerOf(b).order || a.name.localeCompare(b.name, "sv"));
+  const here = rows.filter(isHere);
+  const count = (answer: CoachRow["answer"]) => coaches.filter((coach) => coach.answer === answer).length;
+  const names = here.map((coach) => coach.name.split(" ")[0]).join(", ");
+
   return (
     <details className="group rounded-xl border border-black/10 dark:border-white/10">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block font-semibold">Ledare</span>
-          <span className="block truncate text-xs text-muted">
-            {present.length > 0 ? present.map((coach) => coach.name.split(" ")[0]).join(", ") : "Ingen ibockad"}
+          <span className="block text-sm">
+            {checked
+              ? here.length > 0
+                ? `Här: ${names}`
+                : "Ingen ibockad"
+              : here.length > 0
+                ? `Kommer: ${names}`
+                : "Ingen har svarat Kommer"}
+          </span>
+          <span className="block text-xs text-muted">
+            {checked && `${count("attending")} kommer · `}
+            {count("declined")} kan ej · {count("unanswered")} inget svar
           </span>
         </span>
         <span className="shrink-0 text-xs text-muted">
-          {present.length} <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-180">▾</span>
+          {here.length} <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-180">▾</span>
         </span>
       </summary>
       <ul className="border-t border-black/10 py-1 dark:border-white/10">
-        {coaches.map((coach) => (
-          <li key={coach.id} className="flex items-center pr-3 text-sm">
-            <AttendanceToggle kind="coach" id={coach.id} name={coach.name} />
-            <span className={`truncate ${attendance.isPresent("coach", coach.id) ? "" : "text-muted"}`}>
-              {coach.name}
+        {rows.map((coach) => (
+          <li
+            key={coach.id}
+            className={`flex items-center justify-between gap-2 pr-3 text-sm ${attendance ? "" : "py-2 pl-3"}`}
+          >
+            <span className="flex min-w-0 items-center">
+              <AttendanceToggle kind="coach" id={coach.id} name={coach.name} />
+              <span className={`truncate ${isHere(coach) ? "" : "text-muted"}`}>{coach.name}</span>
             </span>
+            <span className={`shrink-0 text-xs ${answerOf(coach).className}`}>{answerOf(coach).label}</span>
           </li>
         ))}
       </ul>

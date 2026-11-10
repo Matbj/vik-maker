@@ -14,7 +14,7 @@ import {
 } from "@/lib/grouping/workout-players";
 import { realtimeUrl, sealWorkoutLiveQueries } from "@/lib/realtime/workout-live";
 import { presencePushEnabled } from "@/lib/svenskalag/presence";
-import { CoachAttendance, LiveBanner, LoosePlayers, StartWorkoutButton, type LoosePlayer } from "./attendance";
+import { CoachAttendance, LiveBanner, LoosePlayers, StartWorkoutButton, type CoachRow, type LoosePlayer } from "./attendance";
 import { AttendanceProvider } from "./attendance-state";
 import { LiveUpdates } from "./live-updates";
 import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, UnplacedPlayer } from "./grouping-forms";
@@ -165,9 +165,18 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       const answer = answers.get(playerId);
       return { id: playerId, name, levelCode, answer: answer ? ANSWERS[answer] : "Ej kallad", expected: answer === "attending" };
     });
-  const allCoaches = [
-    ...new Map([...coachSquad, ...coachAttendance.everyone].map(({ id: coachId, name }) => [coachId, { id: coachId, name }])).values(),
-  ].sort(byName);
+  const asked = new Map(coachAttendance.everyone.map((coach) => [coach.id, coach]));
+  const coachRows: CoachRow[] = [
+    ...new Map([...coachSquad, ...coachAttendance.everyone].map((coach) => [coach.id, coach])).values(),
+  ].map(({ id: coachId, name }) => {
+    const row = asked.get(coachId);
+    return {
+      id: coachId,
+      name,
+      answer: row?.response ?? null,
+      present: coachAttendance.registered ? row?.coachCheck === "present" : row?.response === "attending",
+    };
+  });
   const opensAt = workout.startsAt.getTime() - ATTENDANCE_OPENS_BEFORE_MS;
   const ended = now > workoutEnd(workout);
   const savesToSvenskalag = presencePushEnabled();
@@ -188,13 +197,6 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
         <p className="mt-4 text-sm text-muted">
           {players.length} {registered ? "spelare närvarande" : "spelare"} · {unanswered} inget svar
         </p>
-        <p className="mt-1.5 text-sm text-muted">
-          {coachAttendance.coaches.length}{" "}
-          {coachAttendance.registered ? "ledare närvarande" : "ledare"}
-          {coachAttendance.coaches.length > 0 &&
-            `: ${coachAttendance.coaches.map((coach) => coach.name.split(" ")[0]).join(", ")}`}
-          {` · ${coachAttendance.unanswered} inget svar`}
-        </p>
         <p className="mt-3 text-xs text-muted">Uppdaterad {whenFormat.format(workout.syncedAt)}</p>
       </header>
 
@@ -209,16 +211,19 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
             pushedAt={recently(workout.presencePushedAt, now)}
             error={workout.presencePushError}
           />
-          <CoachAttendance coaches={allCoaches} />
+          <CoachAttendance coaches={coachRows} checked />
           <LoosePlayers players={loosePlayers} hasGroups={groups.length > 0} />
         </div>
       ) : (
-        <StartWorkoutButton
-          workoutId={id}
-          opensAt={opensAt}
-          open={now.getTime() >= opensAt}
-          label={ended ? "Fyll i närvaro" : "Starta träningen"}
-        />
+        <div className="space-y-3">
+          <CoachAttendance coaches={coachRows} checked={coachAttendance.registered} />
+          <StartWorkoutButton
+            workoutId={id}
+            opensAt={opensAt}
+            open={now.getTime() >= opensAt}
+            label={ended ? "Fyll i närvaro" : "Starta träningen"}
+          />
+        </div>
       )}
 
       {!started && absentCount > 0 && (
