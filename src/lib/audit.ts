@@ -1,0 +1,91 @@
+import "server-only";
+import { eq } from "drizzle-orm";
+import { getDb, schema } from "@/db";
+import { currentCoach } from "@/lib/auth/sessions";
+
+/** Every action that can be logged, with the text the log page shows for it. */
+export const AUDIT_ACTIONS = {
+  login: "Loggade in",
+  logout: "Loggade ut",
+  "attendance.refresh": "Hämtade närvaron",
+  "level_groups.create": "Skapade grupper",
+  "level_groups.delete": "Tog bort grupperna",
+  "level_groups.spread": "Fördelade nya spelare i grupperna",
+  "teams.create": "Skapade lag",
+  "teams.delete": "Tog bort lagen",
+  "teams.spread": "Fördelade nya spelare i lagen",
+  "player.move": "Flyttade en spelare",
+  "player.assign": "Placerade en spelare",
+  "player.remove": "Tog bort en spelare ur en grupp eller ett lag",
+  "separation.add": "Lade till ett par att hålla isär",
+  "separation.remove": "Tog bort ett par att hålla isär",
+  "grouping_notes.update": "Ändrade anteckningarna för gruppindelning",
+} as const;
+
+export type AuditAction = keyof typeof AUDIT_ACTIONS;
+
+type AuditDetails = Record<string, unknown>;
+type Actor = { id: string; name: string };
+
+async function write(actor: Actor, action: AuditAction, details: AuditDetails) {
+  await getDb()
+    .insert(schema.auditLog)
+    .values({ coachId: actor.id, coachName: actor.name, action, details });
+}
+
+/**
+ * Logs what the coach on this browser just did. The details are built in here,
+ * as the change is already made and a failure must not look like the change failed.
+ */
+export async function recordAudit(
+  action: AuditAction,
+  details: () => AuditDetails | Promise<AuditDetails> = () => ({}),
+) {
+  try {
+    const coach = await currentCoach();
+    if (coach) await write(coach, action, await details());
+  } catch (error) {
+    console.error(`writing the audit entry ${action} failed:`, error);
+  }
+}
+
+/** Logs a login. The new session's cookie isn't on this request, so the coach is passed in. */
+export async function recordLogin(coachId: string) {
+  try {
+    const { coaches } = schema;
+    const [coach] = await getDb()
+      .select({ id: coaches.id, name: coaches.name })
+      .from(coaches)
+      .where(eq(coaches.id, coachId));
+    if (coach) await write(coach, "login", {});
+  } catch (error) {
+    console.error("writing the audit entry login failed:", error);
+  }
+}
+
+export async function workoutRef(id: string) {
+  const { workouts } = schema;
+  const [workout] = await getDb()
+    .select({ id: workouts.id, title: workouts.title, startsAt: workouts.startsAt })
+    .from(workouts)
+    .where(eq(workouts.id, id));
+  return workout ?? { id };
+}
+
+export async function playerRef(id: string) {
+  const { players } = schema;
+  const [player] = await getDb()
+    .select({ id: players.id, name: players.name })
+    .from(players)
+    .where(eq(players.id, id));
+  return player ?? { id };
+}
+
+export async function groupRef(id: string) {
+  const { workoutGroups } = schema;
+  const [group] = await getDb()
+    .select({ id: workoutGroups.id, name: workoutGroups.name, kind: workoutGroups.kind })
+    .from(workoutGroups)
+    .where(eq(workoutGroups.id, id));
+  return group ?? { id };
+}

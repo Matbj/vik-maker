@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { recordAudit, recordLogin } from "@/lib/audit";
 import { checkLoginCode, sendLoginCode } from "@/lib/auth/login-codes";
 import { endSession, startSession } from "@/lib/auth/sessions";
 
@@ -47,10 +48,12 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   }
 
   await startSession(result.coachId);
+  await recordLogin(result.coachId);
   redirect(safeNext(formData.get("next")));
 }
 
 export async function logout() {
+  await recordAudit("logout");
   await endSession();
   redirect("/logga-in");
 }

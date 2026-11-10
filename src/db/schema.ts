@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -209,6 +210,21 @@ export const appSettings = pgTable("app_settings", {
   value: text("value").notNull(),
   ...timestamps,
 });
+
+/** What logged-in coaches have done. The keys in `details` say what each id in it refers to. */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    coachId: uuid("coach_id").references(() => coaches.id, { onDelete: "set null" }),
+    /** Kept next to the id so an entry stays readable if the coach is removed. */
+    coachName: text("coach_name").notNull(),
+    action: text("action").notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("audit_log_created_at_idx").on(t.createdAt)],
+);
 
 export type Level = typeof levels.$inferSelect;
 export type Player = typeof players.$inferSelect;

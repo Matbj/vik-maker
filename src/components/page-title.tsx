@@ -6,6 +6,7 @@ const titles: Record<string, string> = {
   "/": "Kommande träningar",
   "/truppen": "Truppen",
   "/installningar": "Inställningar",
+  "/installningar/logging": "Logg",
   "/logga-in": "Logga in",
 };
 

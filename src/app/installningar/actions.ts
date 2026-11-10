@@ -4,11 +4,23 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { playerRef, recordAudit } from "@/lib/audit";
 import { GROUPING_NOTES_KEY } from "@/lib/grouping/preferences";
 
 export type SettingsState = { error?: string; saved?: boolean };
 
 const pairForm = z.object({ playerA: z.uuid(), playerB: z.uuid() });
+
+function recordSeparation(
+  action: "separation.add" | "separation.remove",
+  playerAId: string,
+  playerBId: string,
+) {
+  return recordAudit(action, async () => ({
+    playerA: await playerRef(playerAId),
+    playerB: await playerRef(playerBId),
+  }));
+}
 
 export async function addSeparation(
   _previous: SettingsState,
@@ -19,10 +31,12 @@ export async function addSeparation(
   if (form.data.playerA === form.data.playerB) return { error: "Välj två olika spelare." };
 
   const [playerAId, playerBId] = [form.data.playerA, form.data.playerB].sort();
-  await getDb()
+  const added = await getDb()
     .insert(schema.playerSeparations)
     .values({ playerAId, playerBId })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ playerAId: schema.playerSeparations.playerAId });
+  if (added.length > 0) await recordSeparation("separation.add", playerAId, playerBId);
   revalidatePath("/installningar");
   return {};
 }
@@ -33,14 +47,18 @@ export async function removeSeparation(formData: FormData) {
     .safeParse(Object.fromEntries(formData));
   if (!form.success) return;
 
-  await getDb()
+  const removed = await getDb()
     .delete(schema.playerSeparations)
     .where(
       and(
         eq(schema.playerSeparations.playerAId, form.data.playerAId),
         eq(schema.playerSeparations.playerBId, form.data.playerBId),
       ),
-    );
+    )
+    .returning({ playerAId: schema.playerSeparations.playerAId });
+  if (removed.length > 0) {
+    await recordSeparation("separation.remove", form.data.playerAId, form.data.playerBId);
+  }
   revalidatePath("/installningar");
 }
 
@@ -51,13 +69,25 @@ export async function saveGroupingNotes(
   const value = z.string().max(2000).safeParse(formData.get("notes"));
   if (!value.success) return { error: "Anteckningarna får vara högst 2000 tecken." };
 
-  await getDb()
+  const db = getDb();
+  const notes = value.data.trim();
+  const [previous] = await db
+    .select({ value: schema.appSettings.value })
+    .from(schema.appSettings)
+    .where(eq(schema.appSettings.key, GROUPING_NOTES_KEY));
+  await db
     .insert(schema.appSettings)
-    .values({ key: GROUPING_NOTES_KEY, value: value.data.trim() })
+    .values({ key: GROUPING_NOTES_KEY, value: notes })
     .onConflictDoUpdate({
       target: schema.appSettings.key,
       set: { value: sql`excluded.value`, updatedAt: new Date() },
     });
+  if ((previous?.value ?? "") !== notes) {
+    await recordAudit("grouping_notes.update", () => ({
+      before: previous?.value ?? "",
+      after: notes,
+    }));
+  }
   revalidatePath("/installningar");
   return { saved: true };
 }
