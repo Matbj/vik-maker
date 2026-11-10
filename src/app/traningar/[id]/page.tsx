@@ -208,7 +208,6 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
             pushedVersion={workout.presencePushedVersion}
             pushedAt={recently(workout.presencePushedAt, now)}
             error={workout.presencePushError}
-            overwroteAt={recently(workout.presenceOverwroteAt, now)}
           />
           <CoachAttendance coaches={allCoaches} />
           <LoosePlayers players={loosePlayers} hasGroups={groups.length > 0} />

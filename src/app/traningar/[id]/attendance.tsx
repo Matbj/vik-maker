@@ -62,7 +62,6 @@ export function LiveBanner({
   pushedVersion,
   pushedAt,
   error,
-  overwroteAt,
 }: {
   workoutId: string;
   title: string;
@@ -72,8 +71,6 @@ export function LiveBanner({
   /** When svenskalag.se last took a save, as text. */
   pushedAt: string | null;
   error: string | null;
-  /** When a save last replaced a change made on svenskalag.se, as text. */
-  overwroteAt: string | null;
 }) {
   const [retrying, startRetry] = useTransition();
   const waiting = savesToSvenskalag && !error && version !== pushedVersion;
@@ -120,11 +117,6 @@ export function LiveBanner({
             {retrying ? "Sparar…" : "Försök igen"}
           </button>
         </div>
-      )}
-      {overwroteAt && (
-        <p className="rounded-lg bg-amber-500/15 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
-          Närvaron ändrades i svenskalag.se medan den fylldes i här. Den ändringen ersattes {overwroteAt}.
-        </p>
       )}
     </div>
   );

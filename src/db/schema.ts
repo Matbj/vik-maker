@@ -119,7 +119,7 @@ export const workouts = pgTable(
     presencePushLeaseUntil: timestamp("presence_push_lease_until", { withTimezone: true }),
     /** Why the last save failed, in Swedish for the coaches. Cleared when a save succeeds. */
     presencePushError: text("presence_push_error"),
-    /** When a save last replaced a change that someone had made on svenskalag.se. */
+    /** When a save last replaced a change that someone had made on svenskalag.se. Kept as a record, not shown. */
     presenceOverwroteAt: timestamp("presence_overwrote_at", { withTimezone: true }),
     ...timestamps,
   },
