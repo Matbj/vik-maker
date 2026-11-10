@@ -160,10 +160,10 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
           </ul>
           <div className="flex flex-wrap gap-2">
             {newToGroups.length > 0 && (
-              <SpreadButton workoutId={id} kind="level" label={`Fördela ${newToGroups.length} på grupperna`} />
+              <SpreadButton workoutId={id} kind="level" label="Fördela automatiskt på grupperna" />
             )}
             {newToTeams.length > 0 && (
-              <SpreadButton workoutId={id} kind="team" label={`Fördela ${newToTeams.length} på lagen`} />
+              <SpreadButton workoutId={id} kind="team" label="Fördela automatiskt på lagen" />
             )}
           </div>
         </div>
