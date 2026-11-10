@@ -235,7 +235,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       {newPlayers.length > 0 && (
         <div className="space-y-3 rounded-xl border-2 border-accent p-4">
           <h2 className="font-semibold">
-            {newPlayers.length} {newPlayers.length === 1 ? "ny" : "nya"} spelare utan plats
+            {newPlayers.length} spelare utan plats
           </h2>
           <ul className="flex flex-wrap gap-2">
             {newPlayers.map((player) => (
