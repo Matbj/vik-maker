@@ -124,13 +124,13 @@ export async function refreshAttendance(
   }
 }
 
-const spreadForm = z.object({ workoutId: z.uuid(), kind: z.enum(["level", "team"]) });
+const groupKindForm = z.object({ workoutId: z.uuid(), kind: z.enum(["level", "team"]) });
 
 export async function spreadNewPlayers(
   _previous: GroupingState,
   formData: FormData,
 ): Promise<GroupingState> {
-  const form = spreadForm.safeParse(Object.fromEntries(formData));
+  const form = groupKindForm.safeParse(Object.fromEntries(formData));
   if (!form.success) return { error: "Den här träningen finns inte längre." };
   const { workoutId, kind } = form.data;
 
@@ -188,6 +188,25 @@ export async function spreadNewPlayers(
       .insert(schema.workoutGroupMembers)
       .values(placements.map(({ groupId, playerId }) => ({ groupId, playerId, addedLate: true })))
       .onConflictDoNothing();
+    revalidatePath(`/traningar/${workoutId}`);
+    return {};
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
+
+export async function deleteGroups(
+  _previous: GroupingState,
+  formData: FormData,
+): Promise<GroupingState> {
+  const form = groupKindForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "Den här träningen finns inte längre." };
+  const { workoutId, kind } = form.data;
+
+  try {
+    await getDb()
+      .delete(schema.workoutGroups)
+      .where(and(eq(schema.workoutGroups.workoutId, workoutId), eq(schema.workoutGroups.kind, kind)));
     revalidatePath(`/traningar/${workoutId}`);
     return {};
   } catch (error) {
