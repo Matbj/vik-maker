@@ -11,7 +11,7 @@ import {
   loadWorkoutCoaches,
   loadWorkoutPlayers,
 } from "@/lib/grouping/workout-players";
-import { LevelGroupsForm, RefreshAttendanceButton, SpreadButton, TeamsForm } from "./grouping-forms";
+import { DeleteGroupsButton, LevelGroupsForm, RefreshAttendanceButton, SpreadButton, TeamsForm } from "./grouping-forms";
 
 const DEFAULT_PLAYERS_PER_GROUP = 8;
 const DEFAULT_PLAYERS_PER_TEAM = 7;
@@ -152,7 +152,10 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       )}
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Nivågrupper</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Nivågrupper</h2>
+          {levelGroups.length > 0 && <DeleteGroupsButton workoutId={id} kind="level" />}
+        </div>
         <LevelGroupsForm
           workoutId={id}
           playerCount={players.length}
@@ -191,7 +194,10 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Lag</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Lag</h2>
+          {teams.length > 0 && <DeleteGroupsButton workoutId={id} kind="team" />}
+        </div>
         <TeamsForm
           workoutId={id}
           playerCount={players.length}
