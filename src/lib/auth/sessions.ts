@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
-import { and, eq, gt, lte } from "drizzle-orm";
+import { and, eq, gt, isNotNull, lte } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { getDb, schema } from "@/db";
 
@@ -40,7 +40,7 @@ export async function endSession() {
   store.delete(SESSION_COOKIE);
 }
 
-/** The coach logged in on this browser, or null. */
+/** The coach logged in on this browser, or null. A coach who has lost their email is no longer let in. */
 export async function currentCoach() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -49,17 +49,18 @@ export async function currentCoach() {
     .select({ id: coaches.id, name: coaches.name })
     .from(sessions)
     .innerJoin(coaches, eq(coaches.id, sessions.coachId))
-    .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())))
+    .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date()), isNotNull(coaches.email)))
     .limit(1);
   return coach ?? null;
 }
 
 export async function isValidSession(token: string) {
-  const { sessions } = schema;
+  const { sessions, coaches } = schema;
   const [session] = await getDb()
     .select({ coachId: sessions.coachId })
     .from(sessions)
-    .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())))
+    .innerJoin(coaches, eq(coaches.id, sessions.coachId))
+    .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date()), isNotNull(coaches.email)))
     .limit(1);
   return Boolean(session);
 }
