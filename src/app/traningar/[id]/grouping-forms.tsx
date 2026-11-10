@@ -243,7 +243,8 @@ function ReplaceableCards({
   );
 }
 
-export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
+/** Fetches the answers from svenskalag.se. `fetchedAt` says when that last happened, as text. */
+export function RefreshAttendanceButton({ workoutId, fetchedAt }: { workoutId: string; fetchedAt: string }) {
   const [state, action, pending] = useActionState(refreshAttendance, {});
   return (
     <form action={action} className="flex shrink-0 flex-col items-end gap-1">
@@ -256,6 +257,7 @@ export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
         <RefreshIcon spinning={pending} />
         {pending ? "Hämtar…" : "Hämta svar"}
       </button>
+      <p className="text-xs text-muted">Hämtat {fetchedAt}</p>
       <FormError state={state} />
     </form>
   );

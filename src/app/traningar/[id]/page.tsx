@@ -31,8 +31,7 @@ const timeFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockhol
 const dayFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", day: "numeric", month: "short" });
 
 /** The time, with the day in front when it wasn't today. */
-function recently(date: Date | null, now: Date) {
-  if (!date) return null;
+function recently(date: Date, now: Date) {
   const time = timeFormat.format(date);
   return dayFormat.format(date) === dayFormat.format(now) ? time : `${dayFormat.format(date)} ${time}`;
 }
@@ -192,12 +191,11 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
             <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
             {workout.location && ` · ${workout.location}`}
           </p>
-          <RefreshAttendanceButton workoutId={id} />
+          <RefreshAttendanceButton workoutId={id} fetchedAt={recently(workout.syncedAt, now)} />
         </div>
         <p className="mt-4 text-sm text-muted">
           {players.length} {registered ? "spelare närvarande" : "spelare"} · {unanswered} inget svar
         </p>
-        <p className="mt-3 text-xs text-muted">Uppdaterad {whenFormat.format(workout.syncedAt)}</p>
       </header>
 
       {started ? (
@@ -208,7 +206,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
             savesToSvenskalag={savesToSvenskalag}
             version={workout.presenceVersion}
             pushedVersion={workout.presencePushedVersion}
-            pushedAt={recently(workout.presencePushedAt, now)}
+            pushedAt={workout.presencePushedAt && recently(workout.presencePushedAt, now)}
             error={workout.presencePushError}
           />
           <CoachAttendance coaches={coachRows} checked />
