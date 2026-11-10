@@ -223,21 +223,26 @@ export function AttendanceToggle({ kind, id, name }: { kind: Kind; id: string; n
           present ? "border-accent bg-accent text-on-accent" : "border-current text-muted"
         } ${status === "saved" ? "motion-safe:animate-saved-pop" : ""}`}
       >
-        {present && (
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-4"
-          >
-            <path d="M5 12.5l4.5 4.5L19 7.5" />
-          </svg>
-        )}
+        {present && <CheckMark className="size-4" />}
       </span>
     </button>
+  );
+}
+
+/** The check of the attendance toggle, also used where the page talks about attendance. */
+export function CheckMark({ className }: { className: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
   );
 }

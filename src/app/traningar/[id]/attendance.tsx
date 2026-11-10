@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { PUSH_CATCH_UP_MS } from "@/lib/attendance/times";
 import { pushPresenceNow, startWorkout } from "./actions";
-import { AttendanceToggle, useAttendance } from "./attendance-state";
+import { AttendanceToggle, CheckMark, useAttendance } from "./attendance-state";
 import { buttonClass, cancelButtonClass, FormError } from "./grouping-forms";
 
 /** setTimeout can't wait longer than about 24 days, and a workout that far off needs no timer. */
@@ -51,7 +51,7 @@ export function StartWorkoutButton({
 
 /**
  * Tells the coaches that the attendance is filled in here, and whether svenskalag.se has it.
- * A tinted strip with a dot, to stand apart from the cards of people below it. Also asks for
+ * A tinted strip with the toggles' check, to stand apart from the cards of people below it. Also asks for
  * a save that has been waiting too long, as the function that should have made it can have
  * been stopped.
  */
@@ -89,11 +89,13 @@ export function LiveBanner({
   return (
     <div role="status" className="space-y-2 rounded-lg bg-accent/10 px-3 py-2.5">
       <div className="flex gap-2.5">
-        <span aria-hidden="true" className="relative mt-1.5 flex size-2.5 shrink-0">
+        <span aria-hidden="true" className="relative flex size-5 shrink-0">
           {ongoing && (
-            <span className="absolute inline-flex size-full rounded-full bg-accent opacity-60 motion-safe:animate-ping" />
+            <span className="absolute inline-flex size-full rounded-full bg-accent opacity-50 motion-safe:animate-ping" />
           )}
-          <span className="relative inline-flex size-2.5 rounded-full bg-accent" />
+          <span className="relative flex size-5 items-center justify-center rounded-full bg-accent text-on-accent">
+            <CheckMark className="size-3" />
+          </span>
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
@@ -116,7 +118,7 @@ export function LiveBanner({
                       : null}
             </p>
           </div>
-          <p className="text-xs text-muted">Bocka i de som är här. Alla ledare ser ändringarna direkt.</p>
+          <p className="text-xs text-muted">Bocka i de som är här. Alla ledare ser det direkt.</p>
         </div>
       </div>
       {error && (
