@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 
 const titles: Record<string, string> = {
-  "/": "Kommande träningar",
+  "/": "Träningar",
   "/truppen": "Truppen",
   "/installningar": "Inställningar",
   "/installningar/logging": "Logg",

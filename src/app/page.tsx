@@ -14,6 +14,12 @@ const dateFormat = new Intl.DateTimeFormat("sv-SE", {
   day: "numeric",
   month: "short",
 });
+const dayKeyFormat = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Europe/Stockholm",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 const timeFormat = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Europe/Stockholm",
   hour: "2-digit",
@@ -44,6 +50,7 @@ async function loadWorkouts(since: Date) {
       startsAt: workouts.startsAt,
       endsAt: workouts.endsAt,
       location: workouts.location,
+      liveStartedAt: workouts.liveStartedAt,
       attending: countResponse("attending"),
       declined: countResponse("declined"),
       unanswered: countResponse("unanswered"),
@@ -73,13 +80,25 @@ async function WorkoutLists() {
 
   const now = new Date();
   const rows = await loadWorkouts(new Date(now.getTime() - RECENT_DAYS * 24 * 60 * 60 * 1000));
-  const upcoming = rows.filter((w) => w.startsAt >= now);
-  const recent = rows.filter((w) => w.startsAt < now).reverse();
+  const todayKey = dayKeyFormat.format(now);
+  const isToday = (w: WorkoutRow) => dayKeyFormat.format(w.startsAt) === todayKey;
+  const today = rows.filter(isToday);
+  const upcoming = rows.filter((w) => w.startsAt >= now && !isToday(w));
+  const recent = rows.filter((w) => w.startsAt < now && !isToday(w)).reverse();
 
   return (
     <>
+      {today.length > 0 && (
+        <>
+          <h2 className="text-lg font-semibold">{today.length > 1 ? "Dagens träningar" : "Dagens träning"}</h2>
+          <WorkoutList workouts={today} />
+        </>
+      )}
+      <h2 className={`text-lg font-semibold ${today.length > 0 ? "pt-2" : ""}`}>Kommande träningar</h2>
       {upcoming.length > 0 ? (
         <WorkoutList workouts={upcoming} />
+      ) : today.length > 0 ? (
+        <p className="text-sm text-muted">Inga fler träningar inlagda just nu.</p>
       ) : (
         <Notice title="Inga kommande träningar">
           Träningarna visas här efter en synkning från svenskalag.se.
@@ -107,6 +126,11 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
               <p className="font-medium first-letter:uppercase">
                 {dateFormat.format(w.startsAt)}, {timeFormat.format(w.startsAt)}
                 {w.endsAt && `–${timeFormat.format(w.endsAt)}`}
+                {w.liveStartedAt && (
+                  <span className="ml-2 rounded-full bg-accent px-2 py-0.5 align-middle text-xs font-semibold text-on-accent">
+                    Startad
+                  </span>
+                )}
               </p>
               <p className="truncate text-sm text-muted">
                 {w.title}

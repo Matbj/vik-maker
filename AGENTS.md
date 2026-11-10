@@ -45,7 +45,7 @@ Next.js 16 (App Router, Cache Components), React 19, TypeScript, Tailwind CSS v4
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Workouts |
+| `/` | Workouts: today's (marked once started), upcoming and the last 14 days |
 | `/traningar/[id]` | One workout: attendance, starting it and checking off who is there, leveled groups, teams, spreading new players |
 | `/truppen` | The coaches with roles, emails and phone numbers, then active players and their levels |
 | `/installningar` | Keep-apart pairs and free-text grouping notes |
