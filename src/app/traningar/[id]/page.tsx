@@ -11,7 +11,7 @@ import {
   loadWorkoutCoaches,
   loadWorkoutPlayers,
 } from "@/lib/grouping/workout-players";
-import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, type MoveDestination } from "./grouping-forms";
+import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, UnplacedPlayer, type MoveDestination } from "./grouping-forms";
 
 const DEFAULT_PLAYERS_PER_GROUP = 8;
 const DEFAULT_PLAYERS_PER_TEAM = 7;
@@ -147,9 +147,15 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
           </h2>
           <ul className="flex flex-wrap gap-2">
             {newPlayers.map((player) => (
-              <li key={player.id} className="rounded-full bg-accent/10 px-3 py-1 text-sm">
-                {player.name} <span className="text-xs font-semibold text-accent">{player.levelCode ?? "–"}</span>
-              </li>
+              <UnplacedPlayer
+                key={player.id}
+                workoutId={id}
+                playerId={player.id}
+                name={player.name}
+                levelCode={player.levelCode}
+                groups={inGroup.has(player.id) ? [] : levelDestinations}
+                teams={inTeam.has(player.id) ? [] : teamDestinations}
+              />
             ))}
           </ul>
           <div className="flex flex-wrap gap-2">

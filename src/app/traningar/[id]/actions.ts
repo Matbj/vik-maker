@@ -264,13 +264,55 @@ export async function movePlayer(
   }
 }
 
-const removePlayerForm = z.object({ workoutId: z.uuid(), playerId: z.uuid(), groupId: z.uuid() });
+const groupMemberForm = z.object({ workoutId: z.uuid(), playerId: z.uuid(), groupId: z.uuid() });
+
+/** Places a player without a group or team where a coach chose, also past the AI's rules. */
+export async function assignPlayer(
+  _previous: GroupingState,
+  formData: FormData,
+): Promise<GroupingState> {
+  const form = groupMemberForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: GROUPS_CHANGED };
+  const { workoutId, playerId, groupId } = form.data;
+
+  try {
+    const db = getDb();
+    const [group] = await db
+      .select({ kind: schema.workoutGroups.kind })
+      .from(schema.workoutGroups)
+      .where(and(eq(schema.workoutGroups.id, groupId), eq(schema.workoutGroups.workoutId, workoutId)));
+    if (!group) return { error: GROUPS_CHANGED };
+
+    const [placed] = await db
+      .select({ playerId: schema.workoutGroupMembers.playerId })
+      .from(schema.workoutGroupMembers)
+      .innerJoin(schema.workoutGroups, eq(schema.workoutGroups.id, schema.workoutGroupMembers.groupId))
+      .where(
+        and(
+          eq(schema.workoutGroups.workoutId, workoutId),
+          eq(schema.workoutGroups.kind, group.kind),
+          eq(schema.workoutGroupMembers.playerId, playerId),
+        ),
+      )
+      .limit(1);
+    if (placed) return { error: GROUPS_CHANGED };
+
+    await db
+      .insert(schema.workoutGroupMembers)
+      .values({ groupId, playerId, addedLate: true })
+      .onConflictDoNothing();
+    revalidatePath(`/traningar/${workoutId}`);
+    return {};
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
 
 export async function removePlayer(
   _previous: GroupingState,
   formData: FormData,
 ): Promise<GroupingState> {
-  const form = removePlayerForm.safeParse(Object.fromEntries(formData));
+  const form = groupMemberForm.safeParse(Object.fromEntries(formData));
   if (!form.success) return { error: GROUPS_CHANGED };
   const { workoutId, playerId, groupId } = form.data;
 

@@ -2,6 +2,7 @@
 
 import { useActionState, useId, useRef, useState } from "react";
 import {
+  assignPlayer,
   createLevelGroups,
   createTeams,
   deleteGroups,
@@ -311,6 +312,100 @@ export function DeleteGroupsButton({ workoutId, kind }: { workoutId: string; kin
 
 export type MoveDestination = { id: string; title: string; subtitle?: string; count: string };
 
+function DestinationButton({
+  destination,
+  name,
+  disabled,
+}: {
+  destination: MoveDestination;
+  name: string;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="submit"
+      name={name}
+      value={destination.id}
+      disabled={disabled}
+      className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/10 px-3 py-2.5 text-left text-sm transition-colors enabled:hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:enabled:hover:bg-white/5"
+    >
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{destination.title}</span>
+        {destination.subtitle && <span className="block text-xs text-muted">{destination.subtitle}</span>}
+      </span>
+      <span className="shrink-0 text-xs text-muted">{destination.count}</span>
+    </button>
+  );
+}
+
+/** A player without a place. Tapping the chip opens a dialog to pick a group or team for them. */
+export function UnplacedPlayer({
+  workoutId,
+  playerId,
+  name,
+  levelCode,
+  groups,
+  teams,
+}: {
+  workoutId: string;
+  playerId: string;
+  name: string;
+  levelCode: string | null;
+  groups: MoveDestination[];
+  teams: MoveDestination[];
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  // They can still lack the other kind of place, so the chip and its dialog can outlive a success.
+  const [state, action, pending] = useActionState(async (previous: GroupingState, formData: FormData) => {
+    const result = await assignPlayer(previous, formData);
+    if (!result.error) dialogRef.current?.close();
+    return result;
+  }, {});
+  const sections = [
+    { title: "Nivågrupper", destinations: groups },
+    { title: "Lag", destinations: teams },
+  ].filter((section) => section.destinations.length > 0);
+  const text =
+    sections.length > 1
+      ? "Välj en grupp eller ett lag."
+      : groups.length > 0
+        ? "Välj gruppen spelaren ska vara med i."
+        : "Välj laget spelaren ska vara med i.";
+
+  return (
+    <li>
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        onClick={() => dialogRef.current?.showModal()}
+        className="rounded-full bg-accent/10 px-3 py-1 text-sm transition-colors hover:bg-accent/20"
+      >
+        {name} <span className="text-xs font-semibold text-accent">{levelCode ?? "–"}</span>
+      </button>
+      <Dialog dialogRef={dialogRef} title={`Placera ${name}`} text={text}>
+        <form action={action} className="space-y-3">
+          <input type="hidden" name="workoutId" value={workoutId} />
+          <input type="hidden" name="playerId" value={playerId} />
+          {sections.map((section) => (
+            <div key={section.title} className="space-y-2">
+              {sections.length > 1 && <h4 className="text-xs font-semibold text-muted">{section.title}</h4>}
+              {section.destinations.map((destination) => (
+                <DestinationButton key={destination.id} destination={destination} name="groupId" disabled={pending} />
+              ))}
+            </div>
+          ))}
+          <FormError state={state} />
+        </form>
+        <div className="flex justify-end">
+          <button type="button" onClick={() => dialogRef.current?.close()} className={cancelButtonClass}>
+            Avbryt
+          </button>
+        </div>
+      </Dialog>
+    </li>
+  );
+}
+
 /** One player in a group or team. Tapping the row reveals the buttons to move or remove them. */
 export function PlayerRow({
   workoutId,
@@ -388,22 +483,7 @@ export function PlayerRow({
               <input type="hidden" name="fromGroupId" value={groupId} />
               <input type="hidden" name="playerId" value={playerId} />
               {others.map((destination) => (
-                <button
-                  key={destination.id}
-                  type="submit"
-                  name="toGroupId"
-                  value={destination.id}
-                  disabled={moving}
-                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/10 px-3 py-2.5 text-left text-sm transition-colors enabled:hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:enabled:hover:bg-white/5"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium">{destination.title}</span>
-                    {destination.subtitle && (
-                      <span className="block text-xs text-muted">{destination.subtitle}</span>
-                    )}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted">{destination.count}</span>
-                </button>
+                <DestinationButton key={destination.id} destination={destination} name="toGroupId" disabled={moving} />
               ))}
               <FormError state={moveState} />
             </form>
