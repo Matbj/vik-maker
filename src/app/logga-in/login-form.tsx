@@ -45,27 +45,23 @@ export function LoginForm() {
       <input type="hidden" name="email" value={state.email} />
       <input type="hidden" name="next" value={next} />
       {state.message && <p className="text-sm text-muted">{state.message}</p>}
-      {!state.codeExpired && (
-        <>
-          <label className="block space-y-1">
-            <span className="text-sm font-medium">Kod</span>
-            <input
-              name="code"
-              required
-              autoFocus
-              autoComplete="one-time-code"
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              maxLength={4}
-              className={`${fieldClass} font-mono tracking-[0.5em] uppercase`}
-            />
-          </label>
-          <button type="submit" name="intent" value="verify" disabled={pending} className={buttonClass}>
-            Logga in
-          </button>
-        </>
-      )}
+      <label className="block space-y-1">
+        <span className="text-sm font-medium">Kod</span>
+        <input
+          name="code"
+          required
+          autoFocus
+          autoComplete="one-time-code"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          maxLength={4}
+          className={`${fieldClass} font-mono tracking-[0.5em] uppercase`}
+        />
+      </label>
+      <button type="submit" name="intent" value="verify" disabled={pending} className={buttonClass}>
+        Logga in
+      </button>
       <Error message={state.error} />
       <div className="flex justify-between gap-4">
         <button type="submit" name="intent" value="send" formNoValidate disabled={pending} className={linkClass}>
