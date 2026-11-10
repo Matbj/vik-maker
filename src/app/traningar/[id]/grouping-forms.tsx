@@ -255,7 +255,7 @@ export function DeleteGroupsButton({ workoutId, kind }: { workoutId: string; kin
         type="submit"
         disabled={pending}
         aria-label={label}
-        className="-mr-2.5 flex size-11 items-center justify-center text-red-600 disabled:opacity-50 dark:text-red-400"
+        className="-mr-2.5 flex size-11 cursor-pointer items-center justify-center rounded-full text-red-600 transition-colors enabled:hover:bg-red-500/15 disabled:opacity-50 dark:text-red-400"
       >
         <TrashIcon />
       </button>
