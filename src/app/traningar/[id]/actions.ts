@@ -214,6 +214,124 @@ export async function deleteGroups(
   }
 }
 
+const GROUPS_CHANGED = "Grupperna har ändrats. Ladda om sidan och försök igen.";
+
+const movePlayerForm = z.object({
+  workoutId: z.uuid(),
+  playerId: z.uuid(),
+  fromGroupId: z.uuid(),
+  toGroupId: z.uuid(),
+});
+
+/** A coach's own decision, so it skips the level and keep-apart rules the AI has to follow. */
+export async function movePlayer(
+  _previous: GroupingState,
+  formData: FormData,
+): Promise<GroupingState> {
+  const form = movePlayerForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: GROUPS_CHANGED };
+  const { workoutId, playerId, fromGroupId, toGroupId } = form.data;
+
+  try {
+    const db = getDb();
+    const groups = await db
+      .select({ kind: schema.workoutGroups.kind })
+      .from(schema.workoutGroups)
+      .where(
+        and(
+          eq(schema.workoutGroups.workoutId, workoutId),
+          inArray(schema.workoutGroups.id, [fromGroupId, toGroupId]),
+        ),
+      );
+    if (groups.length !== 2 || groups[0].kind !== groups[1].kind) return { error: GROUPS_CHANGED };
+
+    const moved = await db
+      .update(schema.workoutGroupMembers)
+      .set({ groupId: toGroupId })
+      .where(
+        and(
+          eq(schema.workoutGroupMembers.groupId, fromGroupId),
+          eq(schema.workoutGroupMembers.playerId, playerId),
+        ),
+      )
+      .returning({ playerId: schema.workoutGroupMembers.playerId });
+    if (moved.length === 0) return { error: GROUPS_CHANGED };
+
+    revalidatePath(`/traningar/${workoutId}`);
+    return {};
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
+
+const groupMemberForm = z.object({ workoutId: z.uuid(), playerId: z.uuid(), groupId: z.uuid() });
+
+/** Places a player without a group or team where a coach chose, also past the AI's rules. */
+export async function assignPlayer(
+  _previous: GroupingState,
+  formData: FormData,
+): Promise<GroupingState> {
+  const form = groupMemberForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: GROUPS_CHANGED };
+  const { workoutId, playerId, groupId } = form.data;
+
+  try {
+    const db = getDb();
+    const [group] = await db
+      .select({ kind: schema.workoutGroups.kind })
+      .from(schema.workoutGroups)
+      .where(and(eq(schema.workoutGroups.id, groupId), eq(schema.workoutGroups.workoutId, workoutId)));
+    if (!group) return { error: GROUPS_CHANGED };
+
+    const [placed] = await db
+      .select({ playerId: schema.workoutGroupMembers.playerId })
+      .from(schema.workoutGroupMembers)
+      .innerJoin(schema.workoutGroups, eq(schema.workoutGroups.id, schema.workoutGroupMembers.groupId))
+      .where(
+        and(
+          eq(schema.workoutGroups.workoutId, workoutId),
+          eq(schema.workoutGroups.kind, group.kind),
+          eq(schema.workoutGroupMembers.playerId, playerId),
+        ),
+      )
+      .limit(1);
+    if (placed) return { error: GROUPS_CHANGED };
+
+    await db
+      .insert(schema.workoutGroupMembers)
+      .values({ groupId, playerId, addedLate: true })
+      .onConflictDoNothing();
+    revalidatePath(`/traningar/${workoutId}`);
+    return {};
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
+
+export async function removePlayer(
+  _previous: GroupingState,
+  formData: FormData,
+): Promise<GroupingState> {
+  const form = groupMemberForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: GROUPS_CHANGED };
+  const { workoutId, playerId, groupId } = form.data;
+
+  try {
+    await getDb()
+      .delete(schema.workoutGroupMembers)
+      .where(
+        and(
+          eq(schema.workoutGroupMembers.groupId, groupId),
+          eq(schema.workoutGroupMembers.playerId, playerId),
+        ),
+      );
+    revalidatePath(`/traningar/${workoutId}`);
+    return {};
+  } catch (error) {
+    return errorMessage(error);
+  }
+}
+
 export async function createTeams(
   _previous: GroupingState,
   formData: FormData,

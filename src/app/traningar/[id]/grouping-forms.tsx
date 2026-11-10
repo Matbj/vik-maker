@@ -2,10 +2,13 @@
 
 import { useActionState, useId, useRef, useState } from "react";
 import {
+  assignPlayer,
   createLevelGroups,
   createTeams,
   deleteGroups,
+  movePlayer,
   refreshAttendance,
+  removePlayer,
   spreadNewPlayers,
   type GroupingState,
 } from "./actions";
@@ -100,6 +103,26 @@ function TrashIcon() {
   );
 }
 
+function MoveIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-5"
+    >
+      <path d="M17 3l4 4-4 4" />
+      <path d="M21 7H7" />
+      <path d="M7 21l-4-4 4-4" />
+      <path d="M3 17h14" />
+    </svg>
+  );
+}
+
 /**
  * Holds back a form's submit, also by the Enter key, until the dialog's own submit button is
  * pressed. Render the dialog after the form's main button, so that one stays the default.
@@ -122,18 +145,16 @@ function useConfirmSubmit(needed: boolean) {
   };
 }
 
-function ConfirmDialog({
+function Dialog({
   dialogRef,
-  confirmRef,
   title,
   text,
-  confirmLabel,
+  children,
 }: {
   dialogRef: React.RefObject<HTMLDialogElement | null>;
-  confirmRef: React.RefObject<HTMLButtonElement | null>;
   title: string;
   text: string;
-  confirmLabel: string;
+  children: React.ReactNode;
 }) {
   const titleId = useId();
   return (
@@ -152,20 +173,38 @@ function ConfirmDialog({
           </h3>
           <p className="text-sm text-muted">{text}</p>
         </div>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => dialogRef.current?.close()}
-            className="rounded-lg border border-black/10 px-4 py-2 text-sm font-medium dark:border-white/10"
-          >
-            Avbryt
-          </button>
-          <button ref={confirmRef} type="submit" className={buttonClass}>
-            {confirmLabel}
-          </button>
-        </div>
+        {children}
       </div>
     </dialog>
+  );
+}
+
+const cancelButtonClass = "rounded-lg border border-black/10 px-4 py-2 text-sm font-medium dark:border-white/10";
+
+function ConfirmDialog({
+  dialogRef,
+  confirmRef,
+  title,
+  text,
+  confirmLabel,
+}: {
+  dialogRef: React.RefObject<HTMLDialogElement | null>;
+  confirmRef: React.RefObject<HTMLButtonElement | null>;
+  title: string;
+  text: string;
+  confirmLabel: string;
+}) {
+  return (
+    <Dialog dialogRef={dialogRef} title={title} text={text}>
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={() => dialogRef.current?.close()} className={cancelButtonClass}>
+          Avbryt
+        </button>
+        <button ref={confirmRef} type="submit" className={buttonClass}>
+          {confirmLabel}
+        </button>
+      </div>
+    </Dialog>
   );
 }
 
@@ -268,6 +307,195 @@ export function DeleteGroupsButton({ workoutId, kind }: { workoutId: string; kin
       />
       <FormError state={state} />
     </form>
+  );
+}
+
+export type MoveDestination = { id: string; title: string; subtitle?: string; count: string };
+
+function DestinationButton({
+  destination,
+  name,
+  disabled,
+}: {
+  destination: MoveDestination;
+  name: string;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="submit"
+      name={name}
+      value={destination.id}
+      disabled={disabled}
+      className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/10 px-3 py-2.5 text-left text-sm transition-colors enabled:hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:enabled:hover:bg-white/5"
+    >
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{destination.title}</span>
+        {destination.subtitle && <span className="block text-xs text-muted">{destination.subtitle}</span>}
+      </span>
+      <span className="shrink-0 text-xs text-muted">{destination.count}</span>
+    </button>
+  );
+}
+
+/** A player without a place. Tapping the chip opens a dialog to pick a group or team for them. */
+export function UnplacedPlayer({
+  workoutId,
+  playerId,
+  name,
+  levelCode,
+  groups,
+  teams,
+}: {
+  workoutId: string;
+  playerId: string;
+  name: string;
+  levelCode: string | null;
+  groups: MoveDestination[];
+  teams: MoveDestination[];
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  // They can still lack the other kind of place, so the chip and its dialog can outlive a success.
+  const [state, action, pending] = useActionState(async (previous: GroupingState, formData: FormData) => {
+    const result = await assignPlayer(previous, formData);
+    if (!result.error) dialogRef.current?.close();
+    return result;
+  }, {});
+  const sections = [
+    { title: "Nivågrupper", destinations: groups },
+    { title: "Lag", destinations: teams },
+  ].filter((section) => section.destinations.length > 0);
+  const text =
+    sections.length > 1
+      ? "Välj en grupp eller ett lag."
+      : groups.length > 0
+        ? "Välj gruppen spelaren ska vara med i."
+        : "Välj laget spelaren ska vara med i.";
+
+  return (
+    <li>
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        onClick={() => dialogRef.current?.showModal()}
+        className="rounded-full bg-accent/10 px-3 py-1 text-sm transition-colors hover:bg-accent/20"
+      >
+        {name} <span className="text-xs font-semibold text-accent">{levelCode ?? "–"}</span>
+      </button>
+      <Dialog dialogRef={dialogRef} title={`Placera ${name}`} text={text}>
+        <form action={action} className="space-y-3">
+          <input type="hidden" name="workoutId" value={workoutId} />
+          <input type="hidden" name="playerId" value={playerId} />
+          {sections.map((section) => (
+            <div key={section.title} className="space-y-2">
+              {sections.length > 1 && <h4 className="text-xs font-semibold text-muted">{section.title}</h4>}
+              {section.destinations.map((destination) => (
+                <DestinationButton key={destination.id} destination={destination} name="groupId" disabled={pending} />
+              ))}
+            </div>
+          ))}
+          <FormError state={state} />
+        </form>
+        <div className="flex justify-end">
+          <button type="button" onClick={() => dialogRef.current?.close()} className={cancelButtonClass}>
+            Avbryt
+          </button>
+        </div>
+      </Dialog>
+    </li>
+  );
+}
+
+/** One player in a group or team. Tapping the row reveals the buttons to move or remove them. */
+export function PlayerRow({
+  workoutId,
+  groupId,
+  playerId,
+  name,
+  kind,
+  absent,
+  destinations,
+  children,
+}: {
+  workoutId: string;
+  groupId: string;
+  playerId: string;
+  name: string;
+  kind: "level" | "team";
+  absent: boolean;
+  destinations: MoveDestination[];
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [moveState, moveAction, moving] = useActionState(movePlayer, {});
+  const [removeState, removeAction, removing] = useActionState(removePlayer, {});
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const others = destinations.filter((destination) => destination.id !== groupId);
+  const iconButtonClass =
+    "flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50";
+
+  return (
+    <li className={absent ? "bg-red-500/15" : undefined}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+      >
+        {children}
+      </button>
+      {open && (
+        <div className="px-3 pb-1">
+          <div className="flex justify-end gap-1">
+            {others.length > 0 && (
+              <button
+                type="button"
+                disabled={moving || removing}
+                aria-label={`Flytta ${name}`}
+                onClick={() => dialogRef.current?.showModal()}
+                className={`${iconButtonClass} text-accent enabled:hover:bg-accent/15`}
+              >
+                <MoveIcon />
+              </button>
+            )}
+            <form action={removeAction}>
+              <input type="hidden" name="workoutId" value={workoutId} />
+              <input type="hidden" name="groupId" value={groupId} />
+              <input type="hidden" name="playerId" value={playerId} />
+              <button
+                type="submit"
+                disabled={moving || removing}
+                aria-label={`Ta bort ${name} från ${kind === "level" ? "gruppen" : "laget"}`}
+                className={`${iconButtonClass} text-red-600 enabled:hover:bg-red-500/15 dark:text-red-400`}
+              >
+                <TrashIcon />
+              </button>
+            </form>
+          </div>
+          <FormError state={removeState} />
+          <Dialog
+            dialogRef={dialogRef}
+            title={`Flytta ${name}`}
+            text={kind === "level" ? "Välj gruppen spelaren ska flyttas till." : "Välj laget spelaren ska flyttas till."}
+          >
+            <form action={moveAction} className="space-y-2">
+              <input type="hidden" name="workoutId" value={workoutId} />
+              <input type="hidden" name="fromGroupId" value={groupId} />
+              <input type="hidden" name="playerId" value={playerId} />
+              {others.map((destination) => (
+                <DestinationButton key={destination.id} destination={destination} name="toGroupId" disabled={moving} />
+              ))}
+              <FormError state={moveState} />
+            </form>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => dialogRef.current?.close()} className={cancelButtonClass}>
+                Avbryt
+              </button>
+            </div>
+          </Dialog>
+        </div>
+      )}
+    </li>
   );
 }
 
