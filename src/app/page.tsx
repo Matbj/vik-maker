@@ -126,11 +126,6 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
               <p className="font-medium first-letter:uppercase">
                 {dateFormat.format(w.startsAt)}, {timeFormat.format(w.startsAt)}
                 {w.endsAt && `–${timeFormat.format(w.endsAt)}`}
-                {w.liveStartedAt && (
-                  <span className="ml-2 rounded-full bg-accent px-2 py-0.5 align-middle text-xs font-semibold text-on-accent">
-                    Startad
-                  </span>
-                )}
               </p>
               <p className="truncate text-sm text-muted">
                 {w.title}
@@ -141,6 +136,7 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
                   Svar: {w.attending} ja · {w.declined} nej · {w.unanswered} inget svar
                 </p>
               )}
+              <PresenceSource workout={w} />
             </div>
             <div className="flex shrink-0 gap-3 text-center text-xs text-muted">
               {registered ? (
@@ -162,6 +158,21 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
       })}
     </ul>
   );
+}
+
+/** Says where a workout's närvaro is kept: in this app once started, otherwise on svenskalag.se. */
+function PresenceSource({ workout: w }: { workout: WorkoutRow }) {
+  const badge = "mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold";
+  if (w.liveStartedAt) {
+    return <p className={`${badge} bg-accent text-on-accent`}>Närvaro tas i appen</p>;
+  }
+  if (w.present + w.absent > 0) {
+    return <p className={`${badge} border border-black/15 text-muted dark:border-white/20`}>Närvaro från svenskalag.se</p>;
+  }
+  if (w.startsAt < new Date()) {
+    return <p className={`${badge} border border-black/15 text-muted dark:border-white/20`}>Ingen närvaro tagen</p>;
+  }
+  return null;
 }
 
 function Count({ label, value }: { label: string; value: number }) {
