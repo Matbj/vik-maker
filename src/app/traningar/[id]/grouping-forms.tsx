@@ -424,7 +424,8 @@ export function PlayerRow({
   playerId,
   name,
   kind,
-  absence,
+  present: presentOnPage,
+  absentLabel,
   addedLate,
   destinations,
   children,
@@ -434,18 +435,16 @@ export function PlayerRow({
   playerId: string;
   name: string;
   kind: "level" | "team";
-  /** Why the player isn't coming, or null when they are. A started workout's check comes before it. */
-  absence: string | null;
+  /** Whether the page's data has them there. A started workout's own check comes before it. */
+  present: boolean;
+  /** What to call them when they aren't there, which depends on what they answered. */
+  absentLabel: string;
   addedLate: boolean;
   destinations: MoveDestination[];
   children: React.ReactNode;
 }) {
   const attendance = useAttendance();
-  const absentLabel = attendance
-    ? attendance.isPresent("player", playerId)
-      ? null
-      : "Frånvarande"
-    : absence;
+  const present = attendance ? attendance.isPresent("player", playerId) : presentOnPage;
   const [open, setOpen] = useState(false);
   const [moveState, moveAction, moving] = useActionState(movePlayer, {});
   const [removeState, removeAction, removing] = useActionState(removePlayer, {});
@@ -455,7 +454,7 @@ export function PlayerRow({
     "flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50";
 
   return (
-    <li className={absentLabel ? "bg-red-500/15" : undefined}>
+    <li className={present ? undefined : "bg-red-500/15"}>
       <div className="flex items-center">
         <AttendanceToggle kind="player" id={playerId} name={name} />
         <button
@@ -464,7 +463,7 @@ export function PlayerRow({
           onClick={() => setOpen(!open)}
           className={`flex min-w-0 flex-1 items-center justify-between gap-2 py-1.5 pr-3 text-left text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${attendance ? "min-h-11" : "pl-3"}`}
         >
-          {absentLabel ? (
+          {!present ? (
             <>
               <span className="truncate font-medium text-red-700 line-through dark:text-red-400">{name}</span>
               <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
