@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { SvenskalagClient } from "./client";
 import type { SvenskalagAttendance } from "./types";
@@ -54,17 +54,22 @@ export async function syncWorkouts(range: { from: Date; to: Date }) {
     attendanceRows += attendance.length;
   }
 
-  // After the attendance, so coaches seen for the first time get their contact details too.
-  const coachContacts = await syncCoachContacts(client);
+  // After the attendance, so coaches seen for the first time get their contact details too,
+  // and renamed coaches still match the contact list before anything is cleared.
+  const coachContacts = await syncCoachContacts({ client, clearMissing: true });
 
   return { workouts: workouts.length, players: players.size, coaches: coaches.size, attendanceRows, coachContacts };
 }
 
 /**
  * Copies emails, phone numbers and roles from svenskalag.se's contact list onto the coaches we know, matched by name.
- * Someone no longer listed as a coach loses them all, and with the email the ability to log in.
+ * With `clearMissing`, someone no longer listed as a coach loses them all, and with the email the ability to log in.
+ * Only do that right after the attendance has refreshed the names, or a renamed coach looks like a removed one.
  */
-export async function syncCoachContacts(client = new SvenskalagClient()) {
+export async function syncCoachContacts({
+  client = new SvenskalagClient(),
+  clearMissing = false,
+}: { client?: SvenskalagClient; clearMissing?: boolean } = {}) {
   const db = getDb();
   const { coaches } = schema;
   const contacts = await client.fetchCoachContacts();
@@ -78,9 +83,10 @@ export async function syncCoachContacts(client = new SvenskalagClient()) {
   let withPhone = 0;
   for (const coach of known) {
     const contact = byName.get(normalizeName(coach.name));
-    const email = contact?.email ?? null;
-    const phone = contact?.phone ?? null;
-    const role = contact?.role ?? null;
+    const fallback = clearMissing ? { email: null, phone: null, role: null } : coach;
+    const email = contact?.email ?? fallback.email;
+    const phone = contact?.phone ?? fallback.phone;
+    const role = contact?.role ?? fallback.role;
     if (email) withEmail++;
     if (phone) withPhone++;
     if (email === coach.email && phone === coach.phone && role === coach.role) continue;
@@ -97,14 +103,32 @@ function normalizeName(name: string) {
 
 /** Re-reads one workout's attendance from svenskalag.se. */
 export async function refreshWorkoutAttendance(workoutId: string, svenskalagId: string) {
-  const attendance = await new SvenskalagClient().fetchAttendance(svenskalagId);
+  const db = getDb();
+  const client = new SvenskalagClient();
+  const attendance = await client.fetchAttendance(svenskalagId);
+  const coachAttendance = attendance.filter((a) => a.role === "coach");
+  const coachIds = [...new Set(coachAttendance.map((a) => a.memberSvenskalagId))];
+  const known = await db
+    .select({ svenskalagId: schema.coaches.svenskalagId })
+    .from(schema.coaches)
+    .where(inArray(schema.coaches.svenskalagId, coachIds));
+
   const now = new Date();
   await syncPlayerAttendance(workoutId, attendance.filter((a) => a.role === "player"), now);
-  await syncCoachAttendance(workoutId, attendance.filter((a) => a.role === "coach"), now);
-  await getDb()
+  await syncCoachAttendance(workoutId, coachAttendance, now);
+  await db
     .update(schema.workouts)
     .set({ syncedAt: now, updatedAt: now })
     .where(eq(schema.workouts.id, workoutId));
+
+  // A coach seen for the first time needs their email to be able to log in.
+  if (known.length < coachIds.length) {
+    try {
+      await syncCoachContacts({ client });
+    } catch (err) {
+      console.error("coach contact sync failed, the daily sync will retry:", err);
+    }
+  }
 }
 
 async function syncPlayerAttendance(workoutId: string, attendance: SvenskalagAttendance[], now: Date) {
