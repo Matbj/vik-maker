@@ -254,7 +254,7 @@ export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
         className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
       >
         <RefreshIcon spinning={pending} />
-        {pending ? "Uppdaterar…" : "Uppdatera närvaro"}
+        {pending ? "Hämtar…" : "Hämta svar"}
       </button>
       <FormError state={state} />
     </form>

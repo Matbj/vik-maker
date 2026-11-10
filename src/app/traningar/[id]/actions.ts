@@ -149,7 +149,7 @@ export async function refreshAttendance(
     await recordAudit("attendance.refresh", async () => ({ workout: await workoutRef(workout.id) }));
     return {};
   } catch (error) {
-    return errorMessage(error, "Närvaron kunde inte hämtas från svenskalag.se. Försök igen om en liten stund.");
+    return errorMessage(error, "Svaren kunde inte hämtas från svenskalag.se. Försök igen om en liten stund.");
   }
 }
 
