@@ -4,6 +4,7 @@ import { useActionState, useId, useRef, useState } from "react";
 import {
   createLevelGroups,
   createTeams,
+  deleteGroups,
   refreshAttendance,
   spreadNewPlayers,
   type GroupingState,
@@ -78,18 +79,39 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-5"
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
+  );
+}
+
 /**
  * Holds back a form's submit, also by the Enter key, until the dialog's own submit button is
  * pressed. Render the dialog after the form's main button, so that one stays the default.
  */
-function useConfirmReplacing(replacing: boolean) {
+function useConfirmSubmit(needed: boolean) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   return {
     dialogRef,
     confirmRef,
     onSubmit: (event: React.FormEvent<HTMLFormElement>) => {
-      if (!replacing) return;
+      if (!needed) return;
       if ((event.nativeEvent as SubmitEvent).submitter === confirmRef.current) {
         dialogRef.current?.close();
       } else {
@@ -100,7 +122,7 @@ function useConfirmReplacing(replacing: boolean) {
   };
 }
 
-function ConfirmReplaceDialog({
+function ConfirmDialog({
   dialogRef,
   confirmRef,
   title,
@@ -221,6 +243,34 @@ export function SpreadButton({
   );
 }
 
+export function DeleteGroupsButton({ workoutId, kind }: { workoutId: string; kind: "level" | "team" }) {
+  const [state, action, pending] = useActionState(deleteGroups, {});
+  const { dialogRef, confirmRef, onSubmit } = useConfirmSubmit(true);
+  const label = kind === "level" ? "Ta bort grupperna" : "Ta bort lagen";
+  return (
+    <form action={action} onSubmit={onSubmit} className="flex shrink-0 flex-col items-end gap-1">
+      <input type="hidden" name="workoutId" value={workoutId} />
+      <input type="hidden" name="kind" value={kind} />
+      <button
+        type="submit"
+        disabled={pending}
+        aria-label={label}
+        className="-mr-2.5 flex size-11 items-center justify-center rounded-full text-red-600 transition-colors enabled:hover:bg-red-500/15 disabled:opacity-50 dark:text-red-400"
+      >
+        <TrashIcon />
+      </button>
+      <ConfirmDialog
+        dialogRef={dialogRef}
+        confirmRef={confirmRef}
+        title={`${label}?`}
+        text={kind === "level" ? "Alla nivågrupper för träningen tas bort." : "Alla lag för träningen tas bort."}
+        confirmLabel={label}
+      />
+      <FormError state={state} />
+    </form>
+  );
+}
+
 export function LevelGroupsForm({
   workoutId,
   playerCount,
@@ -236,7 +286,7 @@ export function LevelGroupsForm({
 }) {
   const [state, action, pending] = useActionState(createLevelGroups, {});
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 12);
-  const { dialogRef, confirmRef, onSubmit } = useConfirmReplacing(hasGroups);
+  const { dialogRef, confirmRef, onSubmit } = useConfirmSubmit(hasGroups);
   return (
     <>
       <form
@@ -258,7 +308,7 @@ export function LevelGroupsForm({
           <button type="submit" disabled={pending} className={buttonClass}>
             {pending ? "Tänker…" : hasGroups ? "Skapa nya grupper" : "Skapa grupper"}
           </button>
-          <ConfirmReplaceDialog
+          <ConfirmDialog
             dialogRef={dialogRef}
             confirmRef={confirmRef}
             title="Ersätta grupperna?"
@@ -297,7 +347,7 @@ export function TeamsForm({
 }) {
   const [state, action, pending] = useActionState(createTeams, {});
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 16);
-  const { dialogRef, confirmRef, onSubmit } = useConfirmReplacing(hasTeams);
+  const { dialogRef, confirmRef, onSubmit } = useConfirmSubmit(hasTeams);
   return (
     <>
       <form
@@ -331,7 +381,7 @@ export function TeamsForm({
           <button type="submit" disabled={pending} className={buttonClass}>
             {pending ? "Tänker…" : hasTeams ? "Skapa nya lag" : "Skapa lag"}
           </button>
-          <ConfirmReplaceDialog
+          <ConfirmDialog
             dialogRef={dialogRef}
             confirmRef={confirmRef}
             title="Ersätta lagen?"

@@ -12,8 +12,8 @@ export function SettingsLink() {
       href="/installningar"
       aria-label="Inställningar"
       aria-current={active ? "page" : undefined}
-      className={`col-start-3 -mr-2.5 flex size-11 items-center justify-center justify-self-end ${
-        active ? "text-gold" : "text-white/85"
+      className={`col-start-3 -mr-2.5 flex size-11 items-center justify-center justify-self-end rounded-full transition-colors hover:bg-white/15 ${
+        active ? "text-gold" : "text-white/85 hover:text-white"
       }`}
     >
       <svg

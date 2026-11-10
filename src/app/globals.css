@@ -39,3 +39,10 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* Tailwind leaves buttons with the default arrow cursor. */
+@layer base {
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
