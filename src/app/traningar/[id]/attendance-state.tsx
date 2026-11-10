@@ -11,6 +11,8 @@ type Tap = { present: boolean; pending: number; token: number };
 
 type Attendance = {
   isPresent: (kind: Kind, id: string) => boolean;
+  /** Where the coach's own tap on the person is: on its way to the server, or just saved there. */
+  status: (kind: Kind, id: string) => "saving" | "saved" | null;
   mark: (kind: Kind, id: string, name: string, present: boolean) => void;
 };
 
@@ -22,6 +24,8 @@ const RETRY_MS = 1_000;
 /** How long the page's data gets to catch up with a saved tap before the page is fetched again. */
 const CATCH_UP_MS = 3_000;
 const ERROR_MS = 6_000;
+/** How long a toggle shows that its tap was saved. Covers its animation. */
+const SAVED_MS = 700;
 
 const keyOf = (kind: Kind, id: string) => `${kind}:${id}`;
 
@@ -46,6 +50,8 @@ export function AttendanceProvider({
 }) {
   const router = useRouter();
   const [taps, setTaps] = useState<Record<string, Tap>>({});
+  /** The taps that were just saved, by the token of the tap. */
+  const [saved, setSaved] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const nextToken = useRef(0);
   const errorTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -125,6 +131,16 @@ export function AttendanceProvider({
           return;
         }
 
+        setSaved((current) => ({ ...current, [key]: token }));
+        setTimeout(() => {
+          setSaved((current) => {
+            if (current[key] !== token) return current;
+            const rest = { ...current };
+            delete rest[key];
+            return rest;
+          });
+        }, SAVED_MS);
+
         // The live update can be here before the action's own answer.
         if (serverRef.current.has(key) === present) return release(key, token);
         if (!live) router.refresh();
@@ -146,9 +162,14 @@ export function AttendanceProvider({
         const key = keyOf(kind, id);
         return taps[key]?.present ?? server.has(key);
       },
+      status: (kind, id) => {
+        const key = keyOf(kind, id);
+        if ((taps[key]?.pending ?? 0) > 0) return "saving";
+        return key in saved ? "saved" : null;
+      },
       mark,
     }),
-    [taps, server, mark],
+    [taps, saved, server, mark],
   );
 
   return (
@@ -171,24 +192,36 @@ export function useAttendance() {
   return useContext(AttendanceContext);
 }
 
-/** The round check a coach taps to mark someone present or absent. */
+/**
+ * The round check a coach taps to mark someone present or absent. It changes at once, and
+ * shows that the tap is being sent with a turning ring, and that it was saved with a pop.
+ */
 export function AttendanceToggle({ kind, id, name }: { kind: Kind; id: string; name: string }) {
   const attendance = useAttendance();
   if (!attendance) return null;
   const present = attendance.isPresent(kind, id);
+  const status = attendance.status(kind, id);
+  const ringClass = "pointer-events-none absolute inset-0 m-auto rounded-full border-2";
   return (
     <button
       type="button"
       role="switch"
       aria-checked={present}
+      aria-busy={status === "saving"}
       aria-label={`${name} är här`}
       onClick={() => attendance.mark(kind, id, name, !present)}
-      className="flex size-11 shrink-0 items-center justify-center"
+      className="relative flex size-11 shrink-0 items-center justify-center"
     >
+      {status === "saving" && (
+        <span aria-hidden="true" className={`${ringClass} size-9 animate-spin border-accent/25 border-t-accent`} />
+      )}
+      {status === "saved" && (
+        <span aria-hidden="true" className={`${ringClass} size-7 border-accent opacity-0 motion-safe:animate-saved-ring`} />
+      )}
       <span
         className={`flex size-7 items-center justify-center rounded-full border-2 transition-colors ${
           present ? "border-accent bg-accent text-on-accent" : "border-current text-muted"
-        }`}
+        } ${status === "saved" ? "motion-safe:animate-saved-pop" : ""}`}
       >
         {present && (
           <svg
