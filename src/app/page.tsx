@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { asc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { env } from "@/lib/env";
+import { presencePushEnabled } from "@/lib/svenskalag/presence";
 import { Notice } from "@/components/notice";
 
 const RECENT_DAYS = 14;
@@ -51,6 +52,9 @@ async function loadWorkouts(since: Date) {
       endsAt: workouts.endsAt,
       location: workouts.location,
       liveStartedAt: workouts.liveStartedAt,
+      presenceVersion: workouts.presenceVersion,
+      presencePushedVersion: workouts.presencePushedVersion,
+      presencePushError: workouts.presencePushError,
       attending: countResponse("attending"),
       declined: countResponse("declined"),
       unanswered: countResponse("unanswered"),
@@ -136,7 +140,7 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
                   Svar: {w.attending} ja · {w.declined} nej · {w.unanswered} inget svar
                 </p>
               )}
-              <PresenceSource workout={w} />
+              <PresenceSyncStatus workout={w} />
             </div>
             <div className="flex shrink-0 gap-3 text-center text-xs text-muted">
               {registered ? (
@@ -160,17 +164,31 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
   );
 }
 
-/** Says where a workout's närvaro is kept: in this app once started, otherwise on svenskalag.se. */
-function PresenceSource({ workout: w }: { workout: WorkoutRow }) {
+/** How a workout's närvaro stands against svenskalag.se, where the coaches otherwise look it up. */
+function PresenceSyncStatus({ workout: w }: { workout: WorkoutRow }) {
   const badge = "mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold";
+  const neutral = `${badge} border border-black/15 text-muted dark:border-white/20`;
   if (w.liveStartedAt) {
-    return <p className={`${badge} bg-accent text-on-accent`}>Närvaro tas i appen</p>;
+    if (!presencePushEnabled()) {
+      return <p className={neutral}>Närvaron sparas inte i svenskalag.se</p>;
+    }
+    if (w.presencePushError) {
+      return (
+        <p className={`${badge} bg-red-500/10 text-red-700 dark:text-red-400`}>
+          Närvaron kunde inte sparas i svenskalag.se
+        </p>
+      );
+    }
+    if (w.presencePushedVersion < w.presenceVersion) {
+      return <p className={neutral}>Närvaron väntar på att sparas i svenskalag.se</p>;
+    }
+    return <p className={`${badge} bg-accent text-on-accent`}>Närvaron sparad i svenskalag.se</p>;
   }
   if (w.present + w.absent > 0) {
-    return <p className={`${badge} border border-black/15 text-muted dark:border-white/20`}>Närvaro från svenskalag.se</p>;
+    return <p className={neutral}>Närvaron hämtad från svenskalag.se</p>;
   }
   if (w.startsAt < new Date()) {
-    return <p className={`${badge} border border-black/15 text-muted dark:border-white/20`}>Ingen närvaro tagen</p>;
+    return <p className={neutral}>Ingen närvaro tagen</p>;
   }
   return null;
 }
