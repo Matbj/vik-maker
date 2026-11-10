@@ -17,6 +17,7 @@ const schema = z.object({
   RESEND_FROM: z.string().default("VIK Playmaker <playmaker@mail.blund.tech>"),
   NEON_REALTIME_URL: z.string().url().optional(),
   NEON_REALTIME_SECRET: z.string().optional(),
+  SVENSKALAG_PRESENCE_PUSH: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);

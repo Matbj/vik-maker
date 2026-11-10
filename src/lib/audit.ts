@@ -11,6 +11,9 @@ export const AUDIT_ACTIONS = {
   login: "Loggade in",
   logout: "Loggade ut",
   "attendance.refresh": "Hämtade närvaron",
+  "workout.start": "Startade träningen",
+  "attendance.set": "Ändrade närvaron",
+  "presence.push": "Sparade närvaron i svenskalag.se på nytt",
   "level_groups.create": "Skapade grupper",
   "level_groups.delete": "Tog bort grupperna",
   "level_groups.spread": "Fördelade nya spelare i grupperna",
@@ -92,6 +95,15 @@ export async function playerRef(id: string) {
     .from(players)
     .where(eq(players.id, id));
   return player ?? { id };
+}
+
+export async function coachRef(id: string) {
+  const { coaches } = schema;
+  const [coach] = await getDb()
+    .select({ id: coaches.id, name: coaches.name })
+    .from(coaches)
+    .where(eq(coaches.id, id));
+  return coach ?? { id };
 }
 
 export async function groupRef(id: string) {

@@ -85,7 +85,10 @@ them across the existing groups or teams.
 There is no public API, so the integration logs in with a coach's own account and reads
 the pages (or the JSON endpoints those pages call). It lives in `src/lib/svenskalag/` and is
 **server-only**: credentials come from env vars (`SVENSKALAG_*`), the session cookie is
-saved encrypted in the database, and nothing is ever committed. It is read-only towards svenskalag.se.
+saved encrypted in the database, and nothing is ever committed. It is read-only towards svenskalag.se,
+with one exception: once a coach has started a workout, the attendance they fill in is saved there.
+That only happens where `SVENSKALAG_PRESENCE_PUSH` is `on`, which is production. Leave it out locally,
+as a save replaces the workout's whole attendance list with the one in this database.
 
 Trainings come from the monthly calendar. Each player's answer comes from the activity page,
 and the coaches' check from the "Fyll i närvaro" page. A page that doesn't look as expected

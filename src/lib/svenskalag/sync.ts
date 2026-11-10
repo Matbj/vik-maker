@@ -1,7 +1,8 @@
 import "server-only";
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { SvenskalagClient } from "./client";
+import { presencePushEnabled, pushPresence } from "./presence";
 import type { SvenskalagAttendance } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -25,6 +26,12 @@ export async function syncWorkouts(range: { from: Date; to: Date }) {
   let attendanceRows = 0;
 
   for (const workout of workouts) {
+    // First, so what the coaches filled in here isn't replaced by an older list read below.
+    let presence = await loadPresenceState(workout.id);
+    if (presence.started && presence.version !== presence.pushedVersion) {
+      await pushPresence(presence.workoutId);
+      presence = await loadPresenceState(workout.id);
+    }
     const attendance = await client.fetchAttendance(workout.id);
 
     const now = new Date();
@@ -46,8 +53,10 @@ export async function syncWorkouts(range: { from: Date; to: Date }) {
 
     const playerAttendance = attendance.filter((a) => a.role === "player");
     const coachAttendance = attendance.filter((a) => a.role === "coach");
-    await syncPlayerAttendance(workoutId, playerAttendance, now);
-    await syncCoachAttendance(workoutId, coachAttendance, now);
+    const checks = checkPolicy(workoutId, presence, attendance);
+    await syncPlayerAttendance(workoutId, playerAttendance, now, checks);
+    await syncCoachAttendance(workoutId, coachAttendance, now, checks);
+    await followPushedIds(checks, attendance);
 
     playerAttendance.forEach((a) => players.add(a.memberSvenskalagId));
     coachAttendance.forEach((a) => coaches.add(a.memberSvenskalagId));
@@ -105,7 +114,9 @@ function normalizeName(name: string) {
 export async function refreshWorkoutAttendance(workoutId: string, svenskalagId: string) {
   const db = getDb();
   const client = new SvenskalagClient();
+  const presence = await loadPresenceState(svenskalagId);
   const attendance = await client.fetchAttendance(svenskalagId);
+  const checks = checkPolicy(workoutId, presence, attendance);
   const coachAttendance = attendance.filter((a) => a.role === "coach");
   const coachIds = [...new Set(coachAttendance.map((a) => a.memberSvenskalagId))];
   const known = await db
@@ -114,8 +125,9 @@ export async function refreshWorkoutAttendance(workoutId: string, svenskalagId: 
     .where(inArray(schema.coaches.svenskalagId, coachIds));
 
   const now = new Date();
-  await syncPlayerAttendance(workoutId, attendance.filter((a) => a.role === "player"), now);
-  await syncCoachAttendance(workoutId, coachAttendance, now);
+  await syncPlayerAttendance(workoutId, attendance.filter((a) => a.role === "player"), now, checks);
+  await syncCoachAttendance(workoutId, coachAttendance, now, checks);
+  await followPushedIds(checks, attendance);
   await db
     .update(schema.workouts)
     .set({ syncedAt: now, updatedAt: now })
@@ -131,11 +143,92 @@ export async function refreshWorkoutAttendance(workoutId: string, svenskalagId: 
   }
 }
 
-async function syncPlayerAttendance(workoutId: string, attendance: SvenskalagAttendance[], now: Date) {
+type PresenceState =
+  | { started: false }
+  | { started: true; workoutId: string; version: number; pushedVersion: number };
+
+/** Whether the coaches fill in the workout's attendance here, read before fetching from svenskalag.se. */
+async function loadPresenceState(svenskalagId: string): Promise<PresenceState> {
+  const { workouts } = schema;
+  const [workout] = await getDb()
+    .select({
+      id: workouts.id,
+      liveStartedAt: workouts.liveStartedAt,
+      version: workouts.presenceVersion,
+      pushedVersion: workouts.presencePushedVersion,
+    })
+    .from(workouts)
+    .where(eq(workouts.svenskalagId, svenskalagId));
+  if (!workout?.liveStartedAt) return { started: false };
+  return { started: true, workoutId: workout.id, version: workout.version, pushedVersion: workout.pushedVersion };
+}
+
+/**
+ * How a sync treats the coaches' check. Until a workout is started it follows svenskalag.se.
+ * After that the check is ours and saved there, so svenskalag.se's is only taken when it has
+ * one and none of ours is waiting to be saved, which `guard` tests in the same statement as
+ * the write. The answers always follow svenskalag.se.
+ */
+type CheckPolicy = {
+  started: boolean;
+  /** SQL for whether to take svenskalag.se's check over ours. */
+  guard: SQL;
+  /** Set when our last save should be remembered as what svenskalag.se holds now. */
+  follow?: { workoutId: string; version: number };
+};
+
+function checkPolicy(workoutId: string, presence: PresenceState, attendance: SvenskalagAttendance[]): CheckPolicy {
+  if (!presence.started) return { started: false, guard: sql`true` };
+  // Nothing registered there, such as before our first save, or always where saving is off.
+  if (!attendance.some((a) => a.coachCheck !== null)) return { started: true, guard: sql`false` };
+  // Where saving is off nothing of ours is ever waiting, so svenskalag.se stays the source.
+  if (!presencePushEnabled()) return { started: true, guard: sql`true` };
+
+  const { workouts } = schema;
+  const { version } = presence;
+  return {
+    started: true,
+    guard: sql`(select ${workouts.presenceVersion} = ${version} and ${workouts.presencePushedVersion} = ${version} from ${workouts} where ${workouts.id} = ${workoutId})`,
+    follow: { workoutId, version },
+  };
+}
+
+/** After taking svenskalag.se's check, a later save compares against that list. */
+async function followPushedIds({ follow }: CheckPolicy, attendance: SvenskalagAttendance[]) {
+  if (!follow) return;
+  const { workouts } = schema;
+  await getDb()
+    .update(workouts)
+    .set({
+      presencePushedIds: attendance
+        .filter((a) => a.coachCheck === "present")
+        .map((a) => a.memberSvenskalagId)
+        .sort(),
+    })
+    .where(
+      and(
+        eq(workouts.id, follow.workoutId),
+        eq(workouts.presenceVersion, follow.version),
+        eq(workouts.presencePushedVersion, follow.version),
+      ),
+    );
+}
+
+async function syncPlayerAttendance(
+  workoutId: string,
+  attendance: SvenskalagAttendance[],
+  now: Date,
+  checks: CheckPolicy,
+) {
   const db = getDb();
   const { players, workoutAttendance } = schema;
+  // Someone the coaches marked present after the start stays, also before svenskalag.se knows.
+  const removable = and(
+    eq(workoutAttendance.workoutId, workoutId),
+    checks.started ? sql`${workoutAttendance.coachCheck} is distinct from 'present'` : undefined,
+  );
   if (attendance.length === 0) {
-    await db.delete(workoutAttendance).where(eq(workoutAttendance.workoutId, workoutId));
+    await db.delete(workoutAttendance).where(removable);
     return;
   }
 
@@ -163,27 +256,29 @@ async function syncPlayerAttendance(workoutId: string, attendance: SvenskalagAtt
       target: [workoutAttendance.workoutId, workoutAttendance.playerId],
       set: {
         playerResponse: sql`excluded.player_response`,
-        coachCheck: sql`excluded.coach_check`,
+        coachCheck: sql`case when ${checks.guard} then excluded.coach_check else ${workoutAttendance.coachCheck} end`,
         updatedAt: now,
       },
     });
 
   // Answers removed on svenskalag.se disappear here too.
-  await db
-    .delete(workoutAttendance)
-    .where(
-      and(
-        eq(workoutAttendance.workoutId, workoutId),
-        notInArray(workoutAttendance.playerId, [...ids.values()]),
-      ),
-    );
+  await db.delete(workoutAttendance).where(and(removable, notInArray(workoutAttendance.playerId, [...ids.values()])));
 }
 
-async function syncCoachAttendance(workoutId: string, attendance: SvenskalagAttendance[], now: Date) {
+async function syncCoachAttendance(
+  workoutId: string,
+  attendance: SvenskalagAttendance[],
+  now: Date,
+  checks: CheckPolicy,
+) {
   const db = getDb();
   const { coaches, workoutCoachAttendance } = schema;
+  const removable = and(
+    eq(workoutCoachAttendance.workoutId, workoutId),
+    checks.started ? sql`${workoutCoachAttendance.coachCheck} is distinct from 'present'` : undefined,
+  );
   if (attendance.length === 0) {
-    await db.delete(workoutCoachAttendance).where(eq(workoutCoachAttendance.workoutId, workoutId));
+    await db.delete(workoutCoachAttendance).where(removable);
     return;
   }
 
@@ -211,17 +306,12 @@ async function syncCoachAttendance(workoutId: string, attendance: SvenskalagAtte
       target: [workoutCoachAttendance.workoutId, workoutCoachAttendance.coachId],
       set: {
         response: sql`excluded.response`,
-        coachCheck: sql`excluded.coach_check`,
+        coachCheck: sql`case when ${checks.guard} then excluded.coach_check else ${workoutCoachAttendance.coachCheck} end`,
         updatedAt: now,
       },
     });
 
   await db
     .delete(workoutCoachAttendance)
-    .where(
-      and(
-        eq(workoutCoachAttendance.workoutId, workoutId),
-        notInArray(workoutCoachAttendance.coachId, [...ids.values()]),
-      ),
-    );
+    .where(and(removable, notInArray(workoutCoachAttendance.coachId, [...ids.values()])));
 }

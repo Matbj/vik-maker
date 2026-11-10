@@ -2,9 +2,10 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, isNotNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { ATTENDANCE_OPENS_BEFORE_MS, workoutEnd } from "@/lib/attendance/times";
 import { levelMove } from "@/lib/grouping/level-groups";
 import {
   loadLevelOrder,
@@ -12,14 +13,29 @@ import {
   loadWorkoutPlayers,
 } from "@/lib/grouping/workout-players";
 import { realtimeUrl, sealWorkoutLiveQueries } from "@/lib/realtime/workout-live";
+import { presencePushEnabled } from "@/lib/svenskalag/presence";
+import { CoachAttendance, LiveBanner, LoosePlayers, StartWorkoutButton, type LoosePlayer } from "./attendance";
+import { AttendanceProvider } from "./attendance-state";
 import { LiveUpdates } from "./live-updates";
-import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, UnplacedPlayer, type MoveDestination } from "./grouping-forms";
+import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, UnplacedPlayer } from "./grouping-forms";
 
 const DEFAULT_PLAYERS_PER_GROUP = 8;
 const DEFAULT_PLAYERS_PER_TEAM = 7;
 
 // Claude can take a while to compute leveled groups.
 export const maxDuration = 180;
+
+const ANSWERS = { attending: "Kommer", declined: "Kan ej", unanswered: "Inget svar" } as const;
+
+const timeFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" });
+const dayFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", day: "numeric", month: "short" });
+
+/** The time, with the day in front when it wasn't today. */
+function recently(date: Date | null, now: Date) {
+  if (!date) return null;
+  const time = timeFormat.format(date);
+  return dayFormat.format(date) === dayFormat.format(now) ? time : `${dayFormat.format(date)} ${time}`;
+}
 
 const whenFormat = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Europe/Stockholm",
@@ -52,8 +68,18 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
   const [workout] = await db.select().from(schema.workouts).where(eq(schema.workouts.id, id));
   if (!workout) notFound();
 
+  const started = workout.liveStartedAt !== null;
+  const now = new Date();
   const levelOrder = await loadLevelOrder();
-  const [{ players, registered, unanswered, absences }, coachAttendance, groupRows, memberRows, liveQueries] = await Promise.all([
+  const [
+    { players, registered, unanswered, absences, everyone },
+    coachAttendance,
+    groupRows,
+    memberRows,
+    liveQueries,
+    squad,
+    coachSquad,
+  ] = await Promise.all([
     loadWorkoutPlayers(id, levelOrder),
     loadWorkoutCoaches(id),
     db
@@ -76,6 +102,20 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       .where(eq(schema.workoutGroups.workoutId, id))
       .orderBy(asc(schema.players.name)),
     sealWorkoutLiveQueries(id),
+    // At a started workout anyone on the team can be checked off, also those who weren't asked.
+    started
+      ? db
+          .select({ id: schema.players.id, name: schema.players.name, levelCode: schema.levels.code })
+          .from(schema.players)
+          .leftJoin(schema.levels, eq(schema.levels.id, schema.players.levelId))
+          .where(eq(schema.players.active, true))
+      : [],
+    started
+      ? db
+          .select({ id: schema.coaches.id, name: schema.coaches.name })
+          .from(schema.coaches)
+          .where(isNotNull(schema.coaches.email))
+      : [],
   ]);
   const liveUrl = realtimeUrl();
 
@@ -115,7 +155,24 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
     groups.flatMap((g) => g.members.map((m) => m.id)).filter((playerId) => !here.has(playerId)),
   ).size;
 
-  return (
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, "sv");
+  const answers = new Map(everyone.map((player) => [player.id, player.playerResponse]));
+  // Players in a group or team are checked off in its card. These are the rest.
+  const loosePlayers: LoosePlayer[] = [...new Map([...squad, ...everyone].map((player) => [player.id, player])).values()]
+    .filter((player) => !inGroup.has(player.id) && !inTeam.has(player.id))
+    .sort(byName)
+    .map(({ id: playerId, name, levelCode }) => {
+      const answer = answers.get(playerId);
+      return { id: playerId, name, levelCode, answer: answer ? ANSWERS[answer] : "Ej kallad", expected: answer === "attending" };
+    });
+  const allCoaches = [
+    ...new Map([...coachSquad, ...coachAttendance.everyone].map(({ id: coachId, name }) => [coachId, { id: coachId, name }])).values(),
+  ].sort(byName);
+  const opensAt = workout.startsAt.getTime() - ATTENDANCE_OPENS_BEFORE_MS;
+  const ended = now > workoutEnd(workout);
+  const savesToSvenskalag = presencePushEnabled();
+
+  const page = (
     <div className="space-y-8">
       {liveUrl && liveQueries && (
         <LiveUpdates key={id} workoutId={id} url={liveUrl} initialQueries={liveQueries} />
@@ -141,7 +198,33 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
         <p className="mt-3 text-xs text-muted">Uppdaterad {whenFormat.format(workout.syncedAt)}</p>
       </header>
 
-      {absentCount > 0 && (
+      {started ? (
+        <div className="space-y-3">
+          <LiveBanner
+            workoutId={id}
+            title={ended ? "Närvaron fylls i här" : "Träningen pågår"}
+            savesToSvenskalag={savesToSvenskalag}
+            version={workout.presenceVersion}
+            pushedVersion={workout.presencePushedVersion}
+            pushedAt={recently(workout.presencePushedAt, now)}
+            error={workout.presencePushError}
+            overwroteAt={recently(workout.presenceOverwroteAt, now)}
+          />
+          <CoachAttendance coaches={allCoaches} />
+          <LoosePlayers players={loosePlayers} hasGroups={groups.length > 0} />
+        </div>
+      ) : (
+        <StartWorkoutButton
+          workoutId={id}
+          opensAt={opensAt}
+          open={now.getTime() >= opensAt}
+          label={ended ? "Fyll i närvaro" : "Starta träningen"}
+          registered={registered || coachAttendance.registered}
+          savesToSvenskalag={savesToSvenskalag}
+        />
+      )}
+
+      {!started && absentCount > 0 && (
         <p role="status" className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-400">
           {absentCount} spelare nedan kommer inte längre.
         </p>
@@ -197,7 +280,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
               {group.members.map((member) => {
                 const { direction } = levelMove(member.levelCode, group.levelCodes, levelOrder);
                 return (
-                  <MemberRow
+                  <PlayerRow
                     key={member.id}
                     workoutId={id}
                     groupId={group.id}
@@ -215,7 +298,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
                     ) : (
                       <span className="shrink-0 text-xs text-muted">{member.levelCode ?? "–"}</span>
                     )}
-                  </MemberRow>
+                  </PlayerRow>
                 );
               })}
             </GroupCard>
@@ -242,7 +325,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
               count={countLabel(team.members)}
             >
               {team.members.map((member) => (
-                <MemberRow
+                <PlayerRow
                   key={member.id}
                   workoutId={id}
                   groupId={team.id}
@@ -254,7 +337,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
                   addedLate={member.addedLate}
                 >
                   <span className="shrink-0 text-xs text-muted">{member.levelCode ?? "–"}</span>
-                </MemberRow>
+                </PlayerRow>
               ))}
             </GroupCard>
           ))}
@@ -262,47 +345,17 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       </div>
     </div>
   );
-}
 
-function MemberRow({
-  name,
-  absence,
-  addedLate,
-  children,
-  ...row
-}: {
-  workoutId: string;
-  groupId: string;
-  playerId: string;
-  kind: "level" | "team";
-  destinations: MoveDestination[];
-  name: string;
-  absence: string | null;
-  addedLate: boolean;
-  children: React.ReactNode;
-}) {
-  if (absence) {
-    return (
-      <PlayerRow {...row} name={name} absent>
-        <span className="truncate font-medium text-red-700 line-through dark:text-red-400">{name}</span>
-        <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
-          {absence}
-        </span>
-      </PlayerRow>
-    );
-  }
+  if (!started) return page;
   return (
-    <PlayerRow {...row} name={name} absent={false}>
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate">{name}</span>
-        {addedLate && (
-          <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-bold uppercase text-on-accent">
-            Ny
-          </span>
-        )}
-      </span>
-      {children}
-    </PlayerRow>
+    <AttendanceProvider
+      workoutId={id}
+      presentPlayers={everyone.filter((player) => player.coachCheck === "present").map((player) => player.id)}
+      presentCoaches={coachAttendance.everyone.filter((coach) => coach.coachCheck === "present").map((coach) => coach.id)}
+      live={Boolean(liveUrl && liveQueries)}
+    >
+      {page}
+    </AttendanceProvider>
   );
 }
 

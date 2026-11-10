@@ -78,6 +78,13 @@
       "when": 1794270799945,
       "tag": "0010_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794349830876,
+      "tag": "0011_live_attendance",
+      "breakpoints": true
     }
   ]
 }

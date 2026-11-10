@@ -39,6 +39,31 @@ export type ParsedCoachContact = { name: string; email: string | null; phone: st
 
 export type ParsedMember = { memberId: string; name: string; role: MemberRole };
 
+/**
+ * A member as svenskalag.se's attendance form holds them, with their name and birth date.
+ * A save sends them back untouched, so keep them in memory only: never store or log them.
+ */
+export type PresenceFormMember = {
+  id: number;
+  memberTypeId?: number;
+  isLeader: boolean;
+  sortString?: string | null;
+} & Record<string, unknown>;
+
+export type PresenceFormGroup = {
+  id: number;
+  scheduleId: number;
+  name: string;
+  leaders: PresenceFormMember[];
+  participants: PresenceFormMember[];
+};
+
+export type ParsedPresenceForm = {
+  groups: PresenceFormGroup[];
+  /** Everyone the form can save as present, by svenskalag id. */
+  known: Map<string, PresenceFormMember>;
+};
+
 export type ParsedPresence = {
   /** False until the coaches have registered anyone as present. */
   registered: boolean;
@@ -113,16 +138,8 @@ export function parseResponses(html: string): ParsedResponse[] {
 
 /** The coaches' attendance check, embedded in the "Fyll i närvaro" page. */
 export function parsePresence(html: string): ParsedPresence {
-  const literal = html.match(/^\s*teamPresenceGroups:\s*(\[.*\]),?\s*$/m)?.[1];
-  if (!literal) throw new SvenskalagParseError("missing attendance check data");
-
   type Member = { id: number; memberTypeId: number; fullName: string };
-  let groups: { leaders?: Member[]; participants?: Member[] }[];
-  try {
-    groups = JSON.parse(quoteObjectKeys(literal));
-  } catch {
-    throw new SvenskalagParseError("unreadable attendance check data");
-  }
+  const groups = presenceLiteral<{ leaders?: Member[]; participants?: Member[] }>(html, "teamPresenceGroups");
 
   const members = groups.flatMap((g) => [...(g.leaders ?? []), ...(g.participants ?? [])]);
   return {
@@ -132,6 +149,54 @@ export function parsePresence(html: string): ParsedPresence {
       return role ? [{ memberId: String(m.id), name: m.fullName, role }] : [];
     }),
   };
+}
+
+/**
+ * The same page as the form svenskalag.se saves: its groups of present members, and everyone
+ * who can be added to them. Members already present come first in `known`, so a save sends
+ * those back exactly as they were.
+ */
+export function parsePresenceForm(html: string): ParsedPresenceForm {
+  const groups = presenceLiteral<PresenceFormGroup>(html, "teamPresenceGroups");
+  const attending = presenceLiteral<PresenceFormMember>(html, "attendingMembers");
+  const roster = presenceLiteral<{ members?: PresenceFormMember[] }>(html, "memberTypeGroups");
+
+  const known = new Map<string, PresenceFormMember>();
+  const everyone = [
+    ...groups.flatMap((group) => [...group.leaders, ...group.participants]),
+    ...attending,
+    ...roster.flatMap((group) => group.members ?? []),
+  ];
+  for (const member of everyone) {
+    if (typeof member?.id !== "number" || typeof member.isLeader !== "boolean") {
+      throw new SvenskalagParseError("attendance form member without id or role");
+    }
+    if (!known.has(String(member.id))) known.set(String(member.id), member);
+  }
+  for (const group of groups) {
+    if (!Array.isArray(group.leaders) || !Array.isArray(group.participants)) {
+      throw new SvenskalagParseError("attendance form group without members");
+    }
+  }
+  return { groups, known };
+}
+
+/** Whether the member is a player or a coach, the two kinds whose attendance we keep. */
+export function isTrackedMember(member: PresenceFormMember) {
+  return member.memberTypeId !== undefined && member.memberTypeId in MEMBER_ROLES;
+}
+
+/** One of the JS array literals the "Fyll i närvaro" page hands to its script. */
+function presenceLiteral<T>(html: string, name: string): T[] {
+  const literal = html.match(new RegExp(`^\\s*${name}:\\s*(\\[.*\\]),?\\s*$`, "m"))?.[1];
+  if (!literal) throw new SvenskalagParseError(`missing attendance check data ${name}`);
+  try {
+    const parsed: unknown = JSON.parse(quoteObjectKeys(literal));
+    if (Array.isArray(parsed)) return parsed as T[];
+  } catch {
+    // Reported below.
+  }
+  throw new SvenskalagParseError(`unreadable attendance check data ${name}`);
 }
 
 function assertLoggedIn(html: string) {
