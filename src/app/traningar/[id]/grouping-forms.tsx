@@ -128,7 +128,7 @@ function MoveIcon() {
  * Holds back a form's submit, also by the Enter key, until the dialog's own submit button is
  * pressed. Render the dialog after the form's main button, so that one stays the default.
  */
-export function useConfirmSubmit(needed: boolean) {
+function useConfirmSubmit(needed: boolean) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const confirmRef = useRef<HTMLButtonElement>(null);
   return {
@@ -182,7 +182,7 @@ export function Dialog({
 
 export const cancelButtonClass = "rounded-lg border border-black/10 px-4 py-2 text-sm font-medium dark:border-white/10";
 
-export function ConfirmDialog({
+function ConfirmDialog({
   dialogRef,
   confirmRef,
   title,

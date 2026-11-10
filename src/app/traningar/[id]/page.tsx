@@ -219,8 +219,6 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
           opensAt={opensAt}
           open={now.getTime() >= opensAt}
           label={ended ? "Fyll i närvaro" : "Starta träningen"}
-          registered={registered || coachAttendance.registered}
-          savesToSvenskalag={savesToSvenskalag}
         />
       )}
 

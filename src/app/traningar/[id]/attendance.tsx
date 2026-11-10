@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import { PUSH_CATCH_UP_MS } from "@/lib/attendance/times";
 import { pushPresenceNow, startWorkout } from "./actions";
 import { AttendanceToggle, useAttendance } from "./attendance-state";
-import { buttonClass, cancelButtonClass, ConfirmDialog, Dialog, FormError, useConfirmSubmit } from "./grouping-forms";
+import { buttonClass, cancelButtonClass, Dialog, FormError } from "./grouping-forms";
 
 /** setTimeout can't wait longer than about 24 days, and a workout that far off needs no timer. */
 const LONGEST_TIMER_MS = 24 * 60 * 60 * 1000;
@@ -18,8 +18,6 @@ export function StartWorkoutButton({
   opensAt,
   open: openOnServer,
   label,
-  registered,
-  savesToSvenskalag,
 }: {
   workoutId: string;
   /** Milliseconds since the epoch. */
@@ -27,12 +25,8 @@ export function StartWorkoutButton({
   /** Whether it had opened when the page was made. */
   open: boolean;
   label: string;
-  /** Whether an attendance check is already registered, which a start then keeps. */
-  registered: boolean;
-  savesToSvenskalag: boolean;
 }) {
   const [state, action, pending] = useActionState(startWorkout, {});
-  const { dialogRef, confirmRef, onSubmit } = useConfirmSubmit(true);
   const [opened, setOpened] = useState(false);
 
   useEffect(() => {
@@ -45,26 +39,11 @@ export function StartWorkoutButton({
 
   if (!openOnServer && !opened) return null;
   return (
-    <form action={action} onSubmit={onSubmit} className="space-y-2">
+    <form action={action} className="space-y-2">
       <input type="hidden" name="workoutId" value={workoutId} />
       <button type="submit" disabled={pending} className={`${buttonClass} w-full py-3 text-base`}>
         {pending ? "Startar…" : label}
       </button>
-      <ConfirmDialog
-        dialogRef={dialogRef}
-        confirmRef={confirmRef}
-        title={`${label}?`}
-        text={[
-          registered
-            ? "Närvaron som redan är ifylld behålls."
-            : "Alla som svarat Kommer blir närvarande och övriga frånvarande.",
-          "Sedan bockar ledarna av sina spelare här.",
-          savesToSvenskalag
-            ? "Varje ändring sparas i svenskalag.se."
-            : "Härifrån sparas det inte i svenskalag.se.",
-        ].join(" ")}
-        confirmLabel={label}
-      />
       <FormError state={state} />
     </form>
   );
