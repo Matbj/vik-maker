@@ -25,6 +25,8 @@ const DEFAULT_PLAYERS_PER_TEAM = 7;
 // Claude can take a while to compute leveled groups.
 export const maxDuration = 180;
 
+const ABSENT_AS = { attending: "Uteblev", declined: "Kan ej", unanswered: "Inget svar" } as const;
+
 
 const timeFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" });
 const dayFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", day: "numeric", month: "short" });
@@ -70,7 +72,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
   const now = new Date();
   const levelOrder = await loadLevelOrder();
   const [
-    { players, registered, absences, everyone },
+    { players, registered, everyone },
     coachAttendance,
     groupRows,
     memberRows,
@@ -125,8 +127,6 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
   const teams = groups.filter((g) => g.kind === "team");
 
   const here = new Set(players.map((player) => player.id));
-  const absenceOf = (playerId: string) =>
-    here.has(playerId) ? null : (absences.get(playerId) ?? "Kommer inte");
   const countLabel = (members: { id: string }[]) => {
     const missing = members.filter((member) => !here.has(member.id)).length;
     return missing > 0 ? `${members.length - missing} + ${missing} frånvarande` : String(members.length);
@@ -155,6 +155,11 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
 
   // At a started workout the lists also hold those on the team who weren't asked, to check them off.
   const askedPlayers = new Map(everyone.map((player) => [player.id, player]));
+  // Someone who said yes and isn't there didn't turn up. The others are missing as they answered.
+  const absentAs = (playerId: string) => {
+    const answer = askedPlayers.get(playerId)?.playerResponse;
+    return answer ? ABSENT_AS[answer] : "Ej kallad";
+  };
   const playerRows: PersonRow[] = [
     ...new Map([...squad, ...everyone].map((player) => [player.id, player])).values(),
   ].map(({ id: playerId, name, levelCode }) => {
@@ -290,7 +295,8 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
                     kind="level"
                     destinations={levelDestinations}
                     name={member.name}
-                    absence={absenceOf(member.id)}
+                    present={here.has(member.id)}
+                    absentLabel={absentAs(member.id)}
                     addedLate={member.addedLate}
                   >
                     {direction ? (
@@ -335,7 +341,8 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
                   kind="team"
                   destinations={teamDestinations}
                   name={member.name}
-                  absence={absenceOf(member.id)}
+                  present={here.has(member.id)}
+                  absentLabel={absentAs(member.id)}
                   addedLate={member.addedLate}
                 >
                   <span className="shrink-0 text-xs text-muted">{member.levelCode ?? "–"}</span>
