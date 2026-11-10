@@ -1,7 +1,10 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { currentCoach } from "@/lib/auth/sessions";
+
+const RETENTION_DAYS = 60;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Every action that can be logged, with the text the log page shows for it. */
 export const AUDIT_ACTIONS = {
@@ -61,6 +64,16 @@ export async function recordLogin(coachId: string) {
   } catch (error) {
     console.error("writing the audit entry login failed:", error);
   }
+}
+
+/** Removes entries past the retention period, as they hold children's names. Returns how many. */
+export async function pruneAuditLog() {
+  const { auditLog } = schema;
+  const removed = await getDb()
+    .delete(auditLog)
+    .where(lt(auditLog.createdAt, new Date(Date.now() - RETENTION_DAYS * DAY_MS)))
+    .returning({ id: auditLog.id });
+  return removed.length;
 }
 
 export async function workoutRef(id: string) {

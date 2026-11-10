@@ -86,17 +86,18 @@ async function emailCode(to: string, code: string) {
   if (!response.ok) throw new Error(`Resend returned ${response.status}: ${await response.text()}`);
 }
 
-export type CodeCheck = { status: "ok"; coachId: string } | { status: "wrong" } | { status: "invalid" };
+export type CodeCheck = { status: "ok"; coachId: string } | { status: "failed" };
 
 /**
  * Checks a code. The attempt is counted first in one statement, so simultaneous
  * guesses can't get past the limit. The third wrong attempt uses the code up.
+ * Every failure looks the same, so the login form can't be used to test addresses.
  */
 export async function checkLoginCode(email: string, code: string): Promise<CodeCheck> {
   const db = getDb();
   const { loginCodes } = schema;
   const coach = await findCoach(email);
-  if (!coach) return { status: "wrong" };
+  if (!coach) return { status: "failed" };
 
   const [row] = await db
     .update(loginCodes)
@@ -109,16 +110,14 @@ export async function checkLoginCode(email: string, code: string): Promise<CodeC
       ),
     )
     .returning({ codeHash: loginCodes.codeHash, attempts: loginCodes.attempts });
-  if (!row) return { status: "invalid" };
+  if (!row) return { status: "failed" };
 
   const codeHash = hashCode(coach.id, normalizeCode(code));
-  if (row.codeHash !== codeHash) {
-    return row.attempts >= MAX_ATTEMPTS ? { status: "invalid" } : { status: "wrong" };
-  }
+  if (row.codeHash !== codeHash) return { status: "failed" };
 
   const used = await db
     .delete(loginCodes)
     .where(and(eq(loginCodes.coachId, coach.id), eq(loginCodes.codeHash, codeHash)))
     .returning({ coachId: loginCodes.coachId });
-  return used.length > 0 ? { status: "ok", coachId: coach.id } : { status: "invalid" };
+  return used.length > 0 ? { status: "ok", coachId: coach.id } : { status: "failed" };
 }

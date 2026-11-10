@@ -11,15 +11,21 @@ export type LoginState = {
   email?: string;
   message?: string;
   error?: string;
-  /** The code is used up or expired, so only a new one can help. */
-  codeExpired?: boolean;
 };
 
 const SENT_MESSAGE = "Om adressen tillhör en ledare på svenskalag.se är en kod på väg.";
 
-/** Only ever send people back to a page of this app. */
+const THIS_APP = "https://vik-playmaker.invalid";
+
+/**
+ * Only ever send people back to a page of this app. The address is resolved the
+ * way a browser does, as browsers drop tabs and newlines and read \ as /.
+ */
 function safeNext(next: FormDataEntryValue | null) {
-  return typeof next === "string" && /^\/(?![/\\])/.test(next) ? next : "/";
+  if (typeof next !== "string" || !next.startsWith("/")) return "/";
+  const url = URL.canParse(next, THIS_APP) ? new URL(next, THIS_APP) : null;
+  if (url?.origin !== THIS_APP || url.pathname.startsWith("//")) return "/";
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export async function login(_previous: LoginState, formData: FormData): Promise<LoginState> {
@@ -40,11 +46,8 @@ export async function login(_previous: LoginState, formData: FormData): Promise<
   }
 
   const result = await checkLoginCode(email.data, String(formData.get("code") ?? ""));
-  if (result.status === "wrong") {
-    return { step: "code", email: email.data, error: "Koden stämmer inte. Efter tre felaktiga försök slutar den att gälla." };
-  }
-  if (result.status === "invalid") {
-    return { step: "code", email: email.data, codeExpired: true, error: "Koden gäller inte längre. Skicka en ny." };
+  if (result.status === "failed") {
+    return { step: "code", email: email.data, error: "Koden stämmer inte eller gäller inte längre. Efter tre felaktiga försök behöver du en ny kod." };
   }
 
   await startSession(result.coachId);

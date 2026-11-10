@@ -1,3 +1,4 @@
+import { pruneAuditLog } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { defaultSyncRange, syncWorkouts } from "@/lib/svenskalag/sync";
 
@@ -9,5 +10,7 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  return Response.json(await syncWorkouts(defaultSyncRange()));
+  // First, so a failing sync doesn't keep old entries around.
+  const auditEntriesRemoved = await pruneAuditLog();
+  return Response.json({ ...(await syncWorkouts(defaultSyncRange())), auditEntriesRemoved });
 }
