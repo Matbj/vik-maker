@@ -11,7 +11,7 @@ import {
   loadWorkoutCoaches,
   loadWorkoutPlayers,
 } from "@/lib/grouping/workout-players";
-import { DeleteGroupsButton, LevelGroupsForm, RefreshAttendanceButton, SpreadButton, TeamsForm } from "./grouping-forms";
+import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, type MoveDestination } from "./grouping-forms";
 
 const DEFAULT_PLAYERS_PER_GROUP = 8;
 const DEFAULT_PLAYERS_PER_TEAM = 7;
@@ -89,6 +89,18 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
     const missing = members.filter((member) => !here.has(member.id)).length;
     return missing > 0 ? `${members.length - missing} + ${missing} frånvarande` : String(members.length);
   };
+
+  const levelDestinations = levelGroups.map((group) => ({
+    id: group.id,
+    title: group.name,
+    subtitle: levelLabel(group.levelCodes, group.name),
+    count: countLabel(group.members),
+  }));
+  const teamDestinations = teams.map((team) => ({
+    id: team.id,
+    title: teamTitle(team),
+    count: countLabel(team.members),
+  }));
 
   const inGroup = new Set(levelGroups.flatMap((g) => g.members.map((m) => m.id)));
   const inTeam = new Set(teams.flatMap((t) => t.members.map((m) => m.id)));
@@ -174,6 +186,11 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
                 return (
                   <MemberRow
                     key={member.id}
+                    workoutId={id}
+                    groupId={group.id}
+                    playerId={member.id}
+                    kind="level"
+                    destinations={levelDestinations}
                     name={member.name}
                     absence={absenceOf(member.id)}
                     addedLate={member.addedLate}
@@ -208,12 +225,17 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
           {teams.map((team) => (
             <GroupCard
               key={team.id}
-              title={team.league ? `Serie ${team.league} · ${team.name}` : team.name}
+              title={teamTitle(team)}
               count={countLabel(team.members)}
             >
               {team.members.map((member) => (
                 <MemberRow
                   key={member.id}
+                  workoutId={id}
+                  groupId={team.id}
+                  playerId={member.id}
+                  kind="team"
+                  destinations={teamDestinations}
                   name={member.name}
                   absence={absenceOf(member.id)}
                   addedLate={member.addedLate}
@@ -234,7 +256,13 @@ function MemberRow({
   absence,
   addedLate,
   children,
+  ...row
 }: {
+  workoutId: string;
+  groupId: string;
+  playerId: string;
+  kind: "level" | "team";
+  destinations: MoveDestination[];
   name: string;
   absence: string | null;
   addedLate: boolean;
@@ -242,16 +270,16 @@ function MemberRow({
 }) {
   if (absence) {
     return (
-      <li className="flex items-center justify-between gap-2 bg-red-500/15 px-3 py-1.5 text-sm">
+      <PlayerRow {...row} name={name} absent>
         <span className="truncate font-medium text-red-700 line-through dark:text-red-400">{name}</span>
         <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
           {absence}
         </span>
-      </li>
+      </PlayerRow>
     );
   }
   return (
-    <li className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
+    <PlayerRow {...row} name={name} absent={false}>
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate">{name}</span>
         {addedLate && (
@@ -261,8 +289,12 @@ function MemberRow({
         )}
       </span>
       {children}
-    </li>
+    </PlayerRow>
   );
+}
+
+function teamTitle(team: { name: string; league: number | null }) {
+  return team.league ? `Serie ${team.league} · ${team.name}` : team.name;
 }
 
 /** Older groups are named after their levels, so don't repeat those. */
