@@ -153,6 +153,16 @@ export type PersonRow = {
   loose?: boolean;
 };
 
+/**
+ * Just below the app's top bar in the layout, which is 3.5rem high with a 2px line under it.
+ * An open list's heading sticks there, so it can be folded from anywhere in the list, and
+ * follows the list out of view at its end.
+ */
+const UNDER_TOP_BAR = {
+  stickyTop: "group-open:top-[calc(3.5rem+2px+env(safe-area-inset-top))]",
+  scrollMargin: "scroll-mt-[calc(4rem+2px+env(safe-area-inset-top))]",
+};
+
 const ANSWERS = {
   attending: { label: "Kommer", order: 0, className: "" },
   unanswered: { label: "Inget svar", order: 1, className: "text-muted" },
@@ -193,8 +203,17 @@ export function AttendanceList({
     : 0;
 
   return (
-    <details className="group rounded-xl border border-black/10 dark:border-white/10">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+    <details
+      onToggle={(event) => {
+        // Folded from its stuck heading, the card is above the screen. Bring it back under the top bar.
+        const card = event.currentTarget;
+        if (!card.open && card.getBoundingClientRect().top < 0) card.scrollIntoView({ block: "start" });
+      }}
+      className={`group rounded-xl border border-black/10 dark:border-white/10 ${UNDER_TOP_BAR.scrollMargin}`}
+    >
+      <summary
+        className={`flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl border-black/10 bg-background px-3 py-2 group-open:sticky group-open:z-[5] group-open:rounded-b-none group-open:border-b dark:border-white/10 [&::-webkit-details-marker]:hidden ${UNDER_TOP_BAR.stickyTop}`}
+      >
         <span className="min-w-0">
           <span className="block font-semibold">{kind === "coach" ? "Ledare" : "Spelare"}</span>
           <span className="block text-sm">
@@ -220,7 +239,7 @@ export function AttendanceList({
           {here.length} <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-180">▾</span>
         </span>
       </summary>
-      <ul className="border-t border-black/10 py-1 dark:border-white/10">
+      <ul className="py-1">
         {rows.map((person) => (
           <li
             key={person.id}
