@@ -29,7 +29,7 @@ The app is called VIK Playmaker, for Vendelsö IK. Colors come from the club's c
 
 ## Standing rules
 
-- **svenskalag.se is read-only.** The only allowed POST is the login. Never submit forms or RSVPs, and never call `/schedules/invites/send`, `/{team}/invites/savereply`, `/{team}/invites/removeattendance/*` or save the `chooseparticipants` form.
+- **svenskalag.se is read-only, except for närvaro.** The only allowed POSTs are the login and saving a workout's närvaro with `/{team}/controlpanel/presence/savepresence`, which replaces the whole present list, so always send the full list. Never submit other forms or RSVPs, and never call `/schedules/invites/send`, `/{team}/invites/savereply` or `/{team}/invites/removeattendance/*`.
 - **Never store or log raw svenskalag.se pages.** They contain parents' phone numbers. Keep the `workouts.raw` column unused for that reason. Don't read the "Spelare" section of the contact list, and don't use `/api/v1/{team}/schedules/{id}/invites/members`, which returns the whole club.
 - **The AI only gets anonymous ids, never children's names.** `src/lib/grouping/claude-groups.ts` swaps player ids for throwaway aliases before each call. Coach notes are sent as written, so the Settings page must keep telling coaches not to use names in them.
 - **Credentials live only in the gitignored `.env.local`** and in Vercel's env vars. Never commit them or put them in chat. The one exception is the svenskalag.se session cookie, which is kept encrypted in `app_settings` by `src/lib/svenskalag/session-store.ts`.
