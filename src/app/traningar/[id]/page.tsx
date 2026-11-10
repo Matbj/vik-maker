@@ -11,6 +11,8 @@ import {
   loadWorkoutCoaches,
   loadWorkoutPlayers,
 } from "@/lib/grouping/workout-players";
+import { realtimeUrl, sealWorkoutLiveQueries } from "@/lib/realtime/workout-live";
+import { LiveUpdates } from "./live-updates";
 import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, UnplacedPlayer, type MoveDestination } from "./grouping-forms";
 
 const DEFAULT_PLAYERS_PER_GROUP = 8;
@@ -51,7 +53,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
   if (!workout) notFound();
 
   const levelOrder = await loadLevelOrder();
-  const [{ players, registered, unanswered, absences }, coachAttendance, groupRows, memberRows] = await Promise.all([
+  const [{ players, registered, unanswered, absences }, coachAttendance, groupRows, memberRows, liveQueries] = await Promise.all([
     loadWorkoutPlayers(id, levelOrder),
     loadWorkoutCoaches(id),
     db
@@ -73,7 +75,9 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       .leftJoin(schema.levels, eq(schema.levels.id, schema.players.levelId))
       .where(eq(schema.workoutGroups.workoutId, id))
       .orderBy(asc(schema.players.name)),
+    sealWorkoutLiveQueries(id),
   ]);
+  const liveUrl = realtimeUrl();
 
   const groups = groupRows.map((group) => ({
     ...group,
@@ -113,6 +117,9 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
 
   return (
     <div className="space-y-8">
+      {liveUrl && liveQueries && (
+        <LiveUpdates key={id} workoutId={id} url={liveUrl} initialQueries={liveQueries} />
+      )}
       <header>
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 text-sm text-muted">
