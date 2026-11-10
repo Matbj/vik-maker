@@ -186,16 +186,16 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
         <LiveUpdates key={id} workoutId={id} url={liveUrl} initialQueries={liveQueries} />
       )}
       <header>
-        <div className="flex items-start justify-between gap-3">
-          <p className="min-w-0 text-sm text-muted">
-            <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
-            {workout.location && ` · ${workout.location}`}
-          </p>
-          <RefreshAttendanceButton workoutId={id} fetchedAt={recently(workout.syncedAt, now)} />
-        </div>
+        <p className="text-sm text-muted">
+          <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
+          {workout.location && ` · ${workout.location}`}
+        </p>
         <p className="mt-4 text-sm text-muted">
           {players.length} {registered ? "spelare närvarande" : "spelare"} · {unanswered} inget svar
         </p>
+        <div className="mt-1.5">
+          <RefreshAttendanceButton workoutId={id} fetchedAt={recently(workout.syncedAt, now)} />
+        </div>
       </header>
 
       {started ? (

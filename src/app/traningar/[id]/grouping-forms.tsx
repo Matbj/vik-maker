@@ -243,21 +243,27 @@ function ReplaceableCards({
   );
 }
 
-/** Fetches the answers from svenskalag.se. `fetchedAt` says when that last happened, as text. */
+/**
+ * When the answers were last fetched from svenskalag.se, as the text `fetchedAt`, with a quiet
+ * button next to it to fetch them again.
+ */
 export function RefreshAttendanceButton({ workoutId, fetchedAt }: { workoutId: string; fetchedAt: string }) {
   const [state, action, pending] = useActionState(refreshAttendance, {});
   return (
-    <form action={action} className="flex shrink-0 flex-col items-end gap-1">
+    <form action={action} className="text-sm text-muted">
       <input type="hidden" name="workoutId" value={workoutId} />
-      <button
-        type="submit"
-        disabled={pending}
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
-      >
-        <RefreshIcon spinning={pending} />
-        {pending ? "Hämtar…" : "Hämta svar"}
-      </button>
-      <p className="text-xs text-muted">Hämtat {fetchedAt}</p>
+      <p className="flex flex-wrap items-center gap-x-1.5">
+        <span>Svar hämtade {fetchedAt}</span>
+        <span aria-hidden="true">·</span>
+        <button
+          type="submit"
+          disabled={pending}
+          className="-my-2 flex items-center gap-1 py-2 font-medium text-accent disabled:opacity-50"
+        >
+          <RefreshIcon spinning={pending} />
+          {pending ? "Hämtar…" : "Hämta igen"}
+        </button>
+      </p>
       <FormError state={state} />
     </form>
   );
