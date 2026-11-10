@@ -71,6 +71,13 @@
       "when": 1794267757739,
       "tag": "0009_coach_role",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794270799945,
+      "tag": "0010_audit_log",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { groupRef, playerRef, recordAudit, workoutRef } from "@/lib/audit";
 import { UserError } from "@/lib/errors";
 import { proposeLevelGroups, proposeSpread, proposeTeams } from "@/lib/grouping/claude-groups";
 import { loadGroupingPreferences } from "@/lib/grouping/preferences";
@@ -14,6 +15,7 @@ import {
   loadRecentTeams,
   loadWorkoutPlayers,
   withHistory,
+  type WorkoutPlayer,
 } from "@/lib/grouping/workout-players";
 import { refreshWorkoutAttendance } from "@/lib/svenskalag/sync";
 
@@ -33,15 +35,21 @@ const teamsForm = z.object({
   keepGroups: z.literal("on").optional(),
 });
 
-async function replaceGroups(workoutId: string, kind: "level" | "team", groups: NewGroup[]) {
+async function replaceGroups(
+  workoutId: string,
+  kind: "level" | "team",
+  groups: NewGroup[],
+  players: WorkoutPlayer[],
+) {
   const db = getDb();
   const rows = groups.map((group, sortOrder) => ({ ...group, id: randomUUID(), sortOrder }));
 
   // One atomic batch, so a coach never ends up with the old groups half replaced.
-  await db.batch([
+  const [replaced] = await db.batch([
     db
       .delete(schema.workoutGroups)
-      .where(and(eq(schema.workoutGroups.workoutId, workoutId), eq(schema.workoutGroups.kind, kind))),
+      .where(and(eq(schema.workoutGroups.workoutId, workoutId), eq(schema.workoutGroups.kind, kind)))
+      .returning({ id: schema.workoutGroups.id, name: schema.workoutGroups.name }),
     db.insert(schema.workoutGroups).values(
       rows.map(({ id, name, levelCodes, league, sortOrder }) => ({
         id,
@@ -58,6 +66,19 @@ async function replaceGroups(workoutId: string, kind: "level" | "team", groups: 
       .values(rows.flatMap((row) => row.playerIds.map((playerId) => ({ groupId: row.id, playerId })))),
   ]);
   revalidatePath(`/traningar/${workoutId}`);
+
+  const names = new Map(players.map((player) => [player.id, player.name]));
+  await recordAudit(kind === "level" ? "level_groups.create" : "teams.create", async () => ({
+    workout: await workoutRef(workoutId),
+    replacedGroups: replaced,
+    groups: rows.map(({ id, name, levelCodes, league, playerIds }) => ({
+      id,
+      name,
+      levelCodes,
+      league,
+      players: playerIds.map((playerId) => ({ id: playerId, name: names.get(playerId) })),
+    })),
+  }));
 }
 
 async function loadWorkout(workoutId: string) {
@@ -100,6 +121,7 @@ export async function createLevelGroups(
       workoutId,
       "level",
       proposal.map((group) => ({ ...group, league: null })),
+      players,
     );
     return {};
   } catch (error) {
@@ -118,6 +140,7 @@ export async function refreshAttendance(
     const workout = await loadWorkout(workoutId.data);
     await refreshWorkoutAttendance(workout.id, workout.svenskalagId);
     revalidatePath(`/traningar/${workout.id}`);
+    await recordAudit("attendance.refresh", async () => ({ workout: await workoutRef(workout.id) }));
     return {};
   } catch (error) {
     return errorMessage(error, "Närvaron kunde inte hämtas från svenskalag.se. Försök igen om en liten stund.");
@@ -189,6 +212,13 @@ export async function spreadNewPlayers(
       .values(placements.map(({ groupId, playerId }) => ({ groupId, playerId, addedLate: true })))
       .onConflictDoNothing();
     revalidatePath(`/traningar/${workoutId}`);
+    await recordAudit(kind === "level" ? "level_groups.spread" : "teams.spread", async () => ({
+      workout: await workoutRef(workoutId),
+      placements: placements.map(({ groupId, playerId }) => ({
+        player: { id: playerId, name: newPlayers.find((player) => player.id === playerId)?.name },
+        group: { id: groupId, name: groups.find((group) => group.id === groupId)?.name },
+      })),
+    }));
     return {};
   } catch (error) {
     return errorMessage(error);
@@ -204,10 +234,17 @@ export async function deleteGroups(
   const { workoutId, kind } = form.data;
 
   try {
-    await getDb()
+    const deleted = await getDb()
       .delete(schema.workoutGroups)
-      .where(and(eq(schema.workoutGroups.workoutId, workoutId), eq(schema.workoutGroups.kind, kind)));
+      .where(and(eq(schema.workoutGroups.workoutId, workoutId), eq(schema.workoutGroups.kind, kind)))
+      .returning({ id: schema.workoutGroups.id, name: schema.workoutGroups.name });
     revalidatePath(`/traningar/${workoutId}`);
+    if (deleted.length > 0) {
+      await recordAudit(kind === "level" ? "level_groups.delete" : "teams.delete", async () => ({
+        workout: await workoutRef(workoutId),
+        groups: deleted,
+      }));
+    }
     return {};
   } catch (error) {
     return errorMessage(error);
@@ -258,6 +295,12 @@ export async function movePlayer(
     if (moved.length === 0) return { error: GROUPS_CHANGED };
 
     revalidatePath(`/traningar/${workoutId}`);
+    await recordAudit("player.move", async () => ({
+      workout: await workoutRef(workoutId),
+      player: await playerRef(playerId),
+      fromGroup: await groupRef(fromGroupId),
+      toGroup: await groupRef(toGroupId),
+    }));
     return {};
   } catch (error) {
     return errorMessage(error);
@@ -302,6 +345,11 @@ export async function assignPlayer(
       .values({ groupId, playerId, addedLate: true })
       .onConflictDoNothing();
     revalidatePath(`/traningar/${workoutId}`);
+    await recordAudit("player.assign", async () => ({
+      workout: await workoutRef(workoutId),
+      player: await playerRef(playerId),
+      group: await groupRef(groupId),
+    }));
     return {};
   } catch (error) {
     return errorMessage(error);
@@ -317,15 +365,23 @@ export async function removePlayer(
   const { workoutId, playerId, groupId } = form.data;
 
   try {
-    await getDb()
+    const removed = await getDb()
       .delete(schema.workoutGroupMembers)
       .where(
         and(
           eq(schema.workoutGroupMembers.groupId, groupId),
           eq(schema.workoutGroupMembers.playerId, playerId),
         ),
-      );
+      )
+      .returning({ playerId: schema.workoutGroupMembers.playerId });
     revalidatePath(`/traningar/${workoutId}`);
+    if (removed.length > 0) {
+      await recordAudit("player.remove", async () => ({
+        workout: await workoutRef(workoutId),
+        player: await playerRef(playerId),
+        group: await groupRef(groupId),
+      }));
+    }
     return {};
   } catch (error) {
     return errorMessage(error);
@@ -360,6 +416,7 @@ export async function createTeams(
       workoutId,
       "team",
       teams.map((team, i) => ({ ...team, name: `Lag ${i + 1}`, levelCodes: [] })),
+      players,
     );
     return {};
   } catch (error) {

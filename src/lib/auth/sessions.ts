@@ -40,6 +40,20 @@ export async function endSession() {
   store.delete(SESSION_COOKIE);
 }
 
+/** The coach logged in on this browser, or null. */
+export async function currentCoach() {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  const { sessions, coaches } = schema;
+  const [coach] = await getDb()
+    .select({ id: coaches.id, name: coaches.name })
+    .from(sessions)
+    .innerJoin(coaches, eq(coaches.id, sessions.coachId))
+    .where(and(eq(sessions.tokenHash, hashToken(token)), gt(sessions.expiresAt, new Date())))
+    .limit(1);
+  return coach ?? null;
+}
+
 export async function isValidSession(token: string) {
   const { sessions } = schema;
   const [session] = await getDb()
