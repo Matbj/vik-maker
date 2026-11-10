@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRealtimeClient, type RawLiveQuerySubscription } from "@neon/realtime/client";
 import type { WorkoutLiveQueries } from "@/lib/realtime/workout-live";
@@ -10,11 +10,13 @@ const RENEW_MARGIN_MS = 10_000;
 const RETRY_MS = 5_000;
 /** Collects the rows of one transaction, and the coach's own action, into one refresh. */
 const REFRESH_DELAY_MS = 300;
+/** Short gaps, such as a renewal or a quick reconnect, don't need a notice. */
+const OFFLINE_NOTICE_DELAY_MS = 5_000;
 
 /**
  * Re-renders the workout page when its data changes elsewhere, such as another coach moving
- * a player or a sync. Renders nothing. The first queries come with the page, and later ones
- * from the renew route, which requires a logged-in coach.
+ * a player or a sync. Shows a notice while the updates are cut off. The first queries come
+ * with the page, and later ones from the renew route, which requires a logged-in coach.
  */
 export function LiveUpdates({
   workoutId,
@@ -28,6 +30,7 @@ export function LiveUpdates({
   const router = useRouter();
   // The page sends new queries on every refresh, but the subscriptions renew their own.
   const firstQueries = useRef(initialQueries);
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
     const client = createRealtimeClient({ url, logLevel: "warn" });
@@ -35,6 +38,23 @@ export function LiveUpdates({
     let stopped = false;
     let renewTimer: ReturnType<typeof setTimeout> | undefined;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+    let denied = false;
+
+    const checkConnection = () => {
+      const live =
+        denied ||
+        (navigator.onLine &&
+          subscriptions.length > 0 &&
+          subscriptions.every((subscription) => subscription.getState().status === "live"));
+      if (live) {
+        clearTimeout(noticeTimer);
+        noticeTimer = undefined;
+        setOffline(false);
+      } else {
+        noticeTimer ??= setTimeout(() => setOffline(true), OFFLINE_NOTICE_DELAY_MS);
+      }
+    };
 
     const scheduleRefresh = () => {
       clearTimeout(refreshTimer);
@@ -70,8 +90,12 @@ export function LiveUpdates({
         renewTimer = setTimeout(renew, RETRY_MS);
         return;
       }
-      // Let the subscriptions expire.
-      if (queries === "denied") return;
+      // Let the subscriptions expire. The next page load goes to the login.
+      if (queries === "denied") {
+        denied = true;
+        checkConnection();
+        return;
+      }
       try {
         await Promise.all(Object.values(queries).map((query, i) => subscriptions[i]?.renew(query)));
         scheduleRenew(queries);
@@ -94,10 +118,12 @@ export function LiveUpdates({
         });
         subscription.onStateChange((state) => {
           if (state.status === "error") restart();
+          checkConnection();
         });
         return subscription;
       });
       scheduleRenew(queries);
+      checkConnection();
     };
 
     let restarting = false;
@@ -107,10 +133,16 @@ export function LiveUpdates({
       clearTimeout(renewTimer);
       for (const subscription of subscriptions) subscription.unsubscribe();
       subscriptions = [];
+      checkConnection();
       setTimeout(async () => {
         const queries = await fetchQueries();
         restarting = false;
-        if (stopped || queries === "denied") return;
+        if (stopped) return;
+        if (queries === "denied") {
+          denied = true;
+          checkConnection();
+          return;
+        }
         if (queries === "offline") return restart();
         subscribe(queries);
         // Changes made while disconnected aren't replayed.
@@ -123,17 +155,27 @@ export function LiveUpdates({
       if (document.visibilityState === "visible" && Date.now() >= expiresAt) restart(0);
     };
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", checkConnection);
+    window.addEventListener("offline", checkConnection);
 
     subscribe(firstQueries.current);
 
     return () => {
       stopped = true;
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", checkConnection);
+      window.removeEventListener("offline", checkConnection);
       clearTimeout(renewTimer);
       clearTimeout(refreshTimer);
+      clearTimeout(noticeTimer);
       client.close();
     };
   }, [workoutId, url, router]);
 
-  return null;
+  if (!offline) return null;
+  return (
+    <p role="status" className="rounded-lg bg-amber-500/15 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+      Ingen anslutning. Sidan visar inte andras ändringar förrän du är uppkopplad igen.
+    </p>
+  );
 }
