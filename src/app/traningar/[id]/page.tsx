@@ -14,7 +14,7 @@ import {
 } from "@/lib/grouping/workout-players";
 import { realtimeUrl, sealWorkoutLiveQueries } from "@/lib/realtime/workout-live";
 import { presencePushEnabled } from "@/lib/svenskalag/presence";
-import { CoachAttendance, LiveBanner, LoosePlayers, StartWorkoutButton, type CoachRow, type LoosePlayer } from "./attendance";
+import { AttendanceList, LiveBanner, StartWorkoutButton, type PersonRow } from "./attendance";
 import { AttendanceProvider } from "./attendance-state";
 import { LiveUpdates } from "./live-updates";
 import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, UnplacedPlayer } from "./grouping-forms";
@@ -25,7 +25,6 @@ const DEFAULT_PLAYERS_PER_TEAM = 7;
 // Claude can take a while to compute leveled groups.
 export const maxDuration = 180;
 
-const ANSWERS = { attending: "Kommer", declined: "Kan ej", unanswered: "Inget svar" } as const;
 
 const timeFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" });
 const dayFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", day: "numeric", month: "short" });
@@ -71,7 +70,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
   const now = new Date();
   const levelOrder = await loadLevelOrder();
   const [
-    { players, registered, unanswered, absences, everyone },
+    { players, registered, absences, everyone },
     coachAttendance,
     groupRows,
     memberRows,
@@ -154,21 +153,26 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
     groups.flatMap((g) => g.members.map((m) => m.id)).filter((playerId) => !here.has(playerId)),
   ).size;
 
-  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, "sv");
-  const answers = new Map(everyone.map((player) => [player.id, player.playerResponse]));
-  // Players in a group or team are checked off in its card. These are the rest.
-  const loosePlayers: LoosePlayer[] = [...new Map([...squad, ...everyone].map((player) => [player.id, player])).values()]
-    .filter((player) => !inGroup.has(player.id) && !inTeam.has(player.id))
-    .sort(byName)
-    .map(({ id: playerId, name, levelCode }) => {
-      const answer = answers.get(playerId);
-      return { id: playerId, name, levelCode, answer: answer ? ANSWERS[answer] : "Ej kallad", expected: answer === "attending" };
-    });
-  const asked = new Map(coachAttendance.everyone.map((coach) => [coach.id, coach]));
-  const coachRows: CoachRow[] = [
+  // At a started workout the lists also hold those on the team who weren't asked, to check them off.
+  const askedPlayers = new Map(everyone.map((player) => [player.id, player]));
+  const playerRows: PersonRow[] = [
+    ...new Map([...squad, ...everyone].map((player) => [player.id, player])).values(),
+  ].map(({ id: playerId, name, levelCode }) => {
+    const row = askedPlayers.get(playerId);
+    return {
+      id: playerId,
+      name,
+      detail: levelCode,
+      answer: row?.playerResponse ?? null,
+      present: here.has(playerId),
+      loose: !inGroup.has(playerId) && !inTeam.has(playerId),
+    };
+  });
+  const askedCoaches = new Map(coachAttendance.everyone.map((coach) => [coach.id, coach]));
+  const coachRows: PersonRow[] = [
     ...new Map([...coachSquad, ...coachAttendance.everyone].map((coach) => [coach.id, coach])).values(),
   ].map(({ id: coachId, name }) => {
-    const row = asked.get(coachId);
+    const row = askedCoaches.get(coachId);
     return {
       id: coachId,
       name,
@@ -193,9 +197,6 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
           </p>
           <RefreshAttendanceButton workoutId={id} fetchedAt={recently(workout.syncedAt, now)} />
         </div>
-        <p className="mt-4 text-sm text-muted">
-          {players.length} {registered ? "spelare närvarande" : "spelare"} · {unanswered} inget svar
-        </p>
       </header>
 
       {started ? (
@@ -209,12 +210,13 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
             pushedAt={workout.presencePushedAt && recently(workout.presencePushedAt, now)}
             error={workout.presencePushError}
           />
-          <CoachAttendance coaches={coachRows} checked />
-          <LoosePlayers players={loosePlayers} hasGroups={groups.length > 0} />
+          <AttendanceList kind="coach" people={coachRows} checked />
+          <AttendanceList kind="player" people={playerRows} checked hasGroups={groups.length > 0} />
         </div>
       ) : (
         <div className="space-y-3">
-          <CoachAttendance coaches={coachRows} checked={coachAttendance.registered} />
+          <AttendanceList kind="coach" people={coachRows} checked={coachAttendance.registered} />
+          <AttendanceList kind="player" people={playerRows} checked={registered} />
           <StartWorkoutButton
             workoutId={id}
             opensAt={opensAt}

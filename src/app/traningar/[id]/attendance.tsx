@@ -1,10 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { PUSH_CATCH_UP_MS } from "@/lib/attendance/times";
 import { pushPresenceNow, startWorkout } from "./actions";
 import { AttendanceToggle, useAttendance } from "./attendance-state";
-import { buttonClass, cancelButtonClass, Dialog, FormError } from "./grouping-forms";
+import { buttonClass, cancelButtonClass, FormError } from "./grouping-forms";
 
 /** setTimeout can't wait longer than about 24 days, and a workout that far off needs no timer. */
 const LONGEST_TIMER_MS = 24 * 60 * 60 * 1000;
@@ -122,28 +122,20 @@ export function LiveBanner({
   );
 }
 
-function AttendanceCard({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-black/10 dark:border-white/10">
-      <div className="flex items-center justify-between border-b border-black/10 px-3 py-2 dark:border-white/10">
-        <h3 className="font-semibold">{title}</h3>
-        <span className="text-xs text-muted">{count}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-export type CoachRow = {
+export type PersonRow = {
   id: string;
   name: string;
-  /** What they answered. Null for a coach who wasn't asked to this workout. */
+  /** Shown after the name, such as a player's level. */
+  detail?: string | null;
+  /** What they answered. Null for someone who wasn't asked to this workout. */
   answer: "attending" | "declined" | "unanswered" | null;
   /** Whether they count as there on the page's own data: checked off, or until then said yes. */
   present: boolean;
+  /** A player in no group or team, who has no other row to be checked off in. */
+  loose?: boolean;
 };
 
-const COACH_ANSWERS = {
+const ANSWERS = {
   attending: { label: "Kommer", order: 0, className: "" },
   unanswered: { label: "Inget svar", order: 1, className: "text-muted" },
   declined: { label: "Kan ej", order: 2, className: "text-red-700 dark:text-red-400" },
@@ -151,142 +143,80 @@ const COACH_ANSWERS = {
 } as const;
 
 /**
- * The workout's coaches with what each of them answered. Folded, as the players come first.
- * At a started workout each coach also has their check. `checked` says whether who is there
- * comes from an attendance check, and not only from the answers.
+ * The workout's coaches or players with what each of them answered. Folded, as the groups
+ * come first. At a started workout everyone also has their check, so this is where someone
+ * without a group, or who was never asked, is checked off. `checked` says whether who is
+ * there comes from an attendance check, and not only from the answers.
  */
-export function CoachAttendance({ coaches, checked }: { coaches: CoachRow[]; checked: boolean }) {
+export function AttendanceList({
+  kind,
+  people,
+  checked,
+  hasGroups = false,
+}: {
+  kind: "coach" | "player";
+  people: PersonRow[];
+  checked: boolean;
+  /** For players: whether the workout has groups or teams, which then hold most of the checks. */
+  hasGroups?: boolean;
+}) {
   const attendance = useAttendance();
-  if (coaches.length === 0) return null;
+  if (people.length === 0) return null;
 
-  const isHere = (coach: CoachRow) => (attendance ? attendance.isPresent("coach", coach.id) : coach.present);
-  const answerOf = (coach: CoachRow) => COACH_ANSWERS[coach.answer ?? "none"];
-  const rows = [...coaches].sort((a, b) => answerOf(a).order - answerOf(b).order || a.name.localeCompare(b.name, "sv"));
+  const isHere = (person: PersonRow) => (attendance ? attendance.isPresent(kind, person.id) : person.present);
+  const answerOf = (person: PersonRow) => ANSWERS[person.answer ?? "none"];
+  const rows = [...people].sort((a, b) => answerOf(a).order - answerOf(b).order || a.name.localeCompare(b.name, "sv"));
   const here = rows.filter(isHere);
-  const count = (answer: CoachRow["answer"]) => coaches.filter((coach) => coach.answer === answer).length;
-  const names = here.map((coach) => coach.name.split(" ")[0]).join(", ");
+  const count = (answer: PersonRow["answer"]) => people.filter((person) => person.answer === answer).length;
+  const asked = people.filter((person) => person.answer !== null).length;
+  // A late yes doesn't check anyone off, so say when someone who may have turned up has no row to be found in.
+  const expected = attendance
+    ? rows.filter((person) => person.loose && person.answer === "attending" && !isHere(person)).length
+    : 0;
 
   return (
     <details className="group rounded-xl border border-black/10 dark:border-white/10">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
-          <span className="block font-semibold">Ledare</span>
+          <span className="block font-semibold">{kind === "coach" ? "Ledare" : "Spelare"}</span>
           <span className="block text-sm">
-            {checked
+            {kind === "coach"
               ? here.length > 0
-                ? `Här: ${names}`
-                : "Ingen ibockad"
-              : here.length > 0
-                ? `Kommer: ${names}`
-                : "Ingen har svarat Kommer"}
+                ? `${checked ? "Här" : "Kommer"}: ${here.map((coach) => coach.name.split(" ")[0]).join(", ")}`
+                : checked
+                  ? "Ingen ibockad"
+                  : "Ingen har svarat Kommer"
+              : `${checked ? "Här" : "Kommer"}: ${here.length} av ${asked}`}
           </span>
           <span className="block text-xs text-muted">
             {checked && `${count("attending")} kommer · `}
             {count("declined")} kan ej · {count("unanswered")} inget svar
           </span>
+          {expected > 0 && (
+            <span className="block text-xs font-medium text-accent">
+              {expected} {hasGroups ? "utan grupp " : ""}har svarat Kommer men är inte {expected === 1 ? "ibockad" : "ibockade"}
+            </span>
+          )}
         </span>
         <span className="shrink-0 text-xs text-muted">
           {here.length} <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-180">▾</span>
         </span>
       </summary>
       <ul className="border-t border-black/10 py-1 dark:border-white/10">
-        {rows.map((coach) => (
+        {rows.map((person) => (
           <li
-            key={coach.id}
+            key={person.id}
             className={`flex items-center justify-between gap-2 pr-3 text-sm ${attendance ? "" : "py-2 pl-3"}`}
           >
             <span className="flex min-w-0 items-center">
-              <AttendanceToggle kind="coach" id={coach.id} name={coach.name} />
-              <span className={`truncate ${isHere(coach) ? "" : "text-muted"}`}>{coach.name}</span>
+              <AttendanceToggle kind={kind} id={person.id} name={person.name} />
+              <span className={`truncate ${isHere(person) ? "" : "text-muted"}`}>{person.name}</span>
+              {person.detail && <span className="ml-2 shrink-0 text-xs text-muted">{person.detail}</span>}
             </span>
-            <span className={`shrink-0 text-xs ${answerOf(coach).className}`}>{answerOf(coach).label}</span>
+            <span className={`shrink-0 text-xs ${answerOf(person).className}`}>{answerOf(person).label}</span>
           </li>
         ))}
       </ul>
     </details>
-  );
-}
-
-export type LoosePlayer = {
-  id: string;
-  name: string;
-  levelCode: string | null;
-  /** What they answered, in Swedish, for the coach who is looking for them. */
-  answer: string;
-  /** Said yes, so they are likely to turn up. */
-  expected: boolean;
-};
-
-/**
- * The players who have no row in a group or team to be checked off in. Those who are here are
- * listed with their check, and the rest can be added when they turn up after all.
- */
-export function LoosePlayers({ players, hasGroups }: { players: LoosePlayer[]; hasGroups: boolean }) {
-  const attendance = useAttendance();
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  if (!attendance) return null;
-
-  const here = players.filter((player) => attendance.isPresent("player", player.id));
-  const away = players
-    .filter((player) => !attendance.isPresent("player", player.id))
-    .sort((a, b) => Number(b.expected) - Number(a.expected));
-  const expected = away.filter((player) => player.expected).length;
-
-  return (
-    <div className="space-y-3">
-      {here.length > 0 && (
-        <AttendanceCard title={hasGroups ? "Här utan grupp eller lag" : "Spelare"} count={here.length}>
-          <ul className="py-1">
-            {here.map((player) => (
-              <li key={player.id} className="flex items-center justify-between gap-2 pr-3 text-sm">
-                <span className="flex min-w-0 items-center">
-                  <AttendanceToggle kind="player" id={player.id} name={player.name} />
-                  <span className="truncate">{player.name}</span>
-                </span>
-                <span className="shrink-0 text-xs text-muted">{player.levelCode ?? "–"}</span>
-              </li>
-            ))}
-          </ul>
-        </AttendanceCard>
-      )}
-      {away.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <button
-            type="button"
-            aria-haspopup="dialog"
-            onClick={() => dialogRef.current?.showModal()}
-            className={cancelButtonClass}
-          >
-            Lägg till spelare
-          </button>
-          {expected > 0 && (
-            <p className="text-sm text-muted">
-              {expected} som svarat Kommer är inte {expected === 1 ? "ibockad" : "ibockade"}.
-            </p>
-          )}
-        </div>
-      )}
-      <Dialog dialogRef={dialogRef} title="Lägg till spelare" text="Välj de som är här. De blir närvarande direkt.">
-        <ul className="max-h-[60vh] space-y-2 overflow-y-auto">
-          {away.map((player) => (
-            <li key={player.id}>
-              <button
-                type="button"
-                onClick={() => attendance.mark("player", player.id, player.name, true)}
-                className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/10 px-3 py-2.5 text-left text-sm transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
-              >
-                <span className="truncate font-medium">{player.name}</span>
-                <span className="shrink-0 text-xs text-muted">{player.answer}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="flex justify-end">
-          <button type="button" onClick={() => dialogRef.current?.close()} className={buttonClass}>
-            Klar
-          </button>
-        </div>
-      </Dialog>
-    </div>
   );
 }

@@ -42,7 +42,6 @@ export async function loadWorkoutPlayers(workoutId: string, levelOrder: string[]
     registered,
     /** Everyone asked to the workout, with their answer and the coaches' check. */
     everyone: rows,
-    unanswered: rows.filter((row) => row.playerResponse === "unanswered").length,
     /** Why players who were asked aren't coming, for anyone still in a group or team. */
     absences: new Map(
       rows
