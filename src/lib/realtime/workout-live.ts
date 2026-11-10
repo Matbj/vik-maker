@@ -8,7 +8,9 @@ import { env, requireEnv } from "@/lib/env";
  * The page re-renders on the server when any of them changes.
  */
 const WORKOUT_QUERIES = {
-  workout: "SELECT id, synced_at, starts_at, location FROM workouts WHERE id = $1::uuid",
+  // The save's lease and error text are left out: the first changes without anything to show.
+  workout:
+    "SELECT id, synced_at, starts_at, location, live_started_at, presence_version, presence_pushed_version, presence_pushed_at, presence_push_error IS NOT NULL AS presence_push_failed FROM workouts WHERE id = $1::uuid",
   players:
     "SELECT player_id, player_response, coach_check FROM workout_attendance WHERE workout_id = $1::uuid",
   coaches:

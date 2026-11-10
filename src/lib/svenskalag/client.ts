@@ -5,8 +5,10 @@ import {
   parseCalendarMonth,
   parseCoachContacts,
   parsePresence,
+  parsePresenceForm,
   parseResponses,
   SvenskalagParseError,
+  type PresenceFormGroup,
 } from "./parse";
 import { loadSession, saveSession } from "./session-store";
 import type { SvenskalagAttendance, SvenskalagWorkout } from "./types";
@@ -22,8 +24,8 @@ const REQUEST_DELAY_MS = 250;
  * - Server-only. Credentials come from env vars and never reach the client.
  * - Session cookies are saved encrypted in the database between runs, so the
  *   app only logs in when the saved session has expired. Never in the repo.
- * - Read-only. The login POST is the only non-GET request; never call the
- *   endpoints that save replies, send invites or register attendance.
+ * - Read-only, except for the attendance check. The only non-GET requests are the login and
+ *   `savePresence`; never call the endpoints that save replies or send invites.
  * - Activity pages include guardians' phone numbers. Never store or log raw HTML.
  */
 export class SvenskalagClient {
@@ -85,9 +87,7 @@ export class SvenskalagClient {
   async fetchAttendance(workoutId: string): Promise<SvenskalagAttendance[]> {
     const { responses, presence } = await this.withSession(async () => ({
       responses: parseResponses(await this.get(`${this.teamPath}/aktivitet/${workoutId}`)),
-      presence: parsePresence(
-        await this.get(`${this.teamPath}/controlpanel/presence/chooseparticipants/${workoutId}?reload=false`),
-      ),
+      presence: parsePresence(await this.get(this.presencePath(workoutId))),
     }));
 
     const present = new Set(presence.members.map((m) => m.memberId));
@@ -118,6 +118,48 @@ export class SvenskalagClient {
           coachCheck: "present" as const,
         })),
     ];
+  }
+
+  /** The attendance form of a workout: who is saved as present, and who can be. */
+  async fetchPresenceForm(workoutId: string) {
+    return this.withSession(async () => parsePresenceForm(await this.get(this.presencePath(workoutId))));
+  }
+
+  /**
+   * Saves a workout's attendance check, as the form's "Spara" button does. This replaces the
+   * whole list of who was present, so `groups` must hold everyone, built from `fetchPresenceForm`.
+   */
+  async savePresence(workoutId: string, groups: PresenceFormGroup[]): Promise<void> {
+    await this.ensureSession();
+    if (await this.postPresence(workoutId, groups)) return;
+    // The likeliest reason is a session that has expired since it was saved.
+    if (this.usingSavedSession) {
+      await this.login();
+      if (await this.postPresence(workoutId, groups)) return;
+    }
+    throw new Error("svenskalag.se did not save the attendance");
+  }
+
+  private presencePath(workoutId: string) {
+    return `${this.teamPath}/controlpanel/presence/chooseparticipants/${workoutId}?reload=false`;
+  }
+
+  private async postPresence(workoutId: string, groups: PresenceFormGroup[]) {
+    await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS));
+    const response = await fetch(
+      `${this.baseUrl}${this.teamPath}/controlpanel/presence/savepresence?scheduleid=${workoutId}`,
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json", Cookie: this.cookieHeader() },
+        body: JSON.stringify({ groups }),
+      },
+    );
+    if (this.storeCookies(response)) await saveSession(this.cookies);
+    if (!response.ok) return false;
+    // A login page instead of JSON means the session wasn't accepted.
+    const result = (await response.json().catch(() => null)) as { isSuccess?: boolean } | null;
+    return result?.isSuccess === true;
   }
 
   async fetchCoachContacts() {
@@ -151,11 +193,15 @@ export class SvenskalagClient {
     await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS));
     const response = await fetch(`${this.baseUrl}${path}`, {
       cache: "no-store",
-      headers: { Cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ") },
+      headers: { Cookie: this.cookieHeader() },
     });
     if (!response.ok) throw new Error(`svenskalag.se returned ${response.status} for ${path}`);
     if (this.storeCookies(response)) await saveSession(this.cookies);
     return response.text();
+  }
+
+  private cookieHeader() {
+    return [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
   }
 
   /** Returns whether any cookie changed. */

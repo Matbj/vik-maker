@@ -105,6 +105,22 @@ export const workouts = pgTable(
     /** Whatever we scraped, kept for debugging the integration. */
     raw: jsonb("raw"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow().notNull(),
+    /** Set when a coach starts the workout. From then the coaches fill in the attendance here. */
+    liveStartedAt: timestamp("live_started_at", { withTimezone: true }),
+    liveStartedBy: uuid("live_started_by").references(() => coaches.id, { onDelete: "set null" }),
+    /** Bumped by every attendance edit made here. */
+    presenceVersion: integer("presence_version").notNull().default(0),
+    /** The version svenskalag.se last accepted. Equal to presenceVersion when nothing is waiting. */
+    presencePushedVersion: integer("presence_pushed_version").notNull().default(0),
+    presencePushedAt: timestamp("presence_pushed_at", { withTimezone: true }),
+    /** The svenskalag ids of everyone in the last save, to notice changes made on svenskalag.se. */
+    presencePushedIds: jsonb("presence_pushed_ids").$type<string[]>(),
+    /** Held by the one save that is running, so two never overlap. */
+    presencePushLeaseUntil: timestamp("presence_push_lease_until", { withTimezone: true }),
+    /** Why the last save failed, in Swedish for the coaches. Cleared when a save succeeds. */
+    presencePushError: text("presence_push_error"),
+    /** When a save last replaced a change that someone had made on svenskalag.se. Kept as a record, not shown. */
+    presenceOverwroteAt: timestamp("presence_overwrote_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [uniqueIndex("workouts_svenskalag_id_idx").on(t.svenskalagId)],

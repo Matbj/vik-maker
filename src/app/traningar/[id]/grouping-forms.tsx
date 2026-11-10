@@ -12,13 +12,14 @@ import {
   spreadNewPlayers,
   type GroupingState,
 } from "./actions";
+import { AttendanceToggle, useAttendance } from "./attendance-state";
 
 const inputClass =
   "w-16 rounded-lg border border-black/10 bg-transparent px-2 py-1.5 text-center dark:border-white/10";
-const buttonClass =
+export const buttonClass =
   "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50";
 
-function FormError({ state }: { state: GroupingState }) {
+export function FormError({ state }: { state: GroupingState }) {
   if (!state.error) return null;
   return (
     <p role="alert" className="text-sm text-red-600 dark:text-red-400">
@@ -145,7 +146,7 @@ function useConfirmSubmit(needed: boolean) {
   };
 }
 
-function Dialog({
+export function Dialog({
   dialogRef,
   title,
   text,
@@ -179,7 +180,7 @@ function Dialog({
   );
 }
 
-const cancelButtonClass = "rounded-lg border border-black/10 px-4 py-2 text-sm font-medium dark:border-white/10";
+export const cancelButtonClass = "rounded-lg border border-black/10 px-4 py-2 text-sm font-medium dark:border-white/10";
 
 function ConfirmDialog({
   dialogRef,
@@ -242,7 +243,11 @@ function ReplaceableCards({
   );
 }
 
-export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
+/**
+ * Fetches the answers from svenskalag.se. The button also says when that last happened, as
+ * the text `fetchedAt`, so the two read as one thing.
+ */
+export function RefreshAttendanceButton({ workoutId, fetchedAt }: { workoutId: string; fetchedAt: string }) {
   const [state, action, pending] = useActionState(refreshAttendance, {});
   return (
     <form action={action} className="flex shrink-0 flex-col items-end gap-1">
@@ -250,10 +255,13 @@ export function RefreshAttendanceButton({ workoutId }: { workoutId: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-white/10"
+        className="flex items-center gap-2.5 whitespace-nowrap rounded-lg border border-black/10 px-3 py-1.5 text-left transition-colors enabled:hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:enabled:hover:bg-white/5"
       >
         <RefreshIcon spinning={pending} />
-        {pending ? "Uppdaterar…" : "Uppdatera närvaro"}
+        <span className="flex flex-col leading-tight">
+          <span className="text-sm font-medium">{pending ? "Hämtar…" : "Hämta svar"}</span>
+          <span className="text-xs text-muted">Hämtat {fetchedAt}</span>
+        </span>
       </button>
       <FormError state={state} />
     </form>
@@ -406,14 +414,18 @@ export function UnplacedPlayer({
   );
 }
 
-/** One player in a group or team. Tapping the row reveals the buttons to move or remove them. */
+/**
+ * One player in a group or team. Tapping the row reveals the buttons to move or remove them.
+ * At a started workout the row also has the check that marks them present or absent.
+ */
 export function PlayerRow({
   workoutId,
   groupId,
   playerId,
   name,
   kind,
-  absent,
+  absence,
+  addedLate,
   destinations,
   children,
 }: {
@@ -422,10 +434,18 @@ export function PlayerRow({
   playerId: string;
   name: string;
   kind: "level" | "team";
-  absent: boolean;
+  /** Why the player isn't coming, or null when they are. A started workout's check comes before it. */
+  absence: string | null;
+  addedLate: boolean;
   destinations: MoveDestination[];
   children: React.ReactNode;
 }) {
+  const attendance = useAttendance();
+  const absentLabel = attendance
+    ? attendance.isPresent("player", playerId)
+      ? null
+      : "Frånvarande"
+    : absence;
   const [open, setOpen] = useState(false);
   const [moveState, moveAction, moving] = useActionState(movePlayer, {});
   const [removeState, removeAction, removing] = useActionState(removePlayer, {});
@@ -435,15 +455,37 @@ export function PlayerRow({
     "flex size-11 items-center justify-center rounded-full transition-colors disabled:opacity-50";
 
   return (
-    <li className={absent ? "bg-red-500/15" : undefined}>
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-      >
-        {children}
-      </button>
+    <li className={absentLabel ? "bg-red-500/15" : undefined}>
+      <div className="flex items-center">
+        <AttendanceToggle kind="player" id={playerId} name={name} />
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className={`flex min-w-0 flex-1 items-center justify-between gap-2 py-1.5 pr-3 text-left text-sm transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${attendance ? "min-h-11" : "pl-3"}`}
+        >
+          {absentLabel ? (
+            <>
+              <span className="truncate font-medium text-red-700 line-through dark:text-red-400">{name}</span>
+              <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold uppercase text-white">
+                {absentLabel}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{name}</span>
+                {addedLate && (
+                  <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-xs font-bold uppercase text-on-accent">
+                    Ny
+                  </span>
+                )}
+              </span>
+              {children}
+            </>
+          )}
+        </button>
+      </div>
       {open && (
         <div className="px-3 pb-1">
           <div className="flex justify-end gap-1">

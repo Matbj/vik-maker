@@ -40,7 +40,8 @@ export async function loadWorkoutPlayers(workoutId: string, levelOrder: string[]
   const pool = new Set(attending.map((row) => row.id));
   return {
     registered,
-    unanswered: rows.filter((row) => row.playerResponse === "unanswered").length,
+    /** Everyone asked to the workout, with their answer and the coaches' check. */
+    everyone: rows,
     /** Why players who were asked aren't coming, for anyone still in a group or team. */
     absences: new Map(
       rows
@@ -57,7 +58,7 @@ export async function loadWorkoutPlayers(workoutId: string, levelOrder: string[]
   };
 }
 
-/** Coaches at a workout: the attendance check once it's registered, until then whoever said yes. */
+/** The coaches asked to a workout, with their answer and the attendance check on them. */
 export async function loadWorkoutCoaches(workoutId: string) {
   const { coaches, workoutCoachAttendance } = schema;
   const rows = await getDb()
@@ -72,13 +73,10 @@ export async function loadWorkoutCoaches(workoutId: string) {
     .where(eq(workoutCoachAttendance.workoutId, workoutId))
     .orderBy(asc(coaches.name));
 
-  const registered = rows.some((row) => row.coachCheck !== null);
   return {
-    registered,
-    unanswered: rows.filter((row) => row.response === "unanswered").length,
-    coaches: rows.filter((row) =>
-      registered ? row.coachCheck === "present" : row.response === "attending",
-    ),
+    /** Whether an attendance check is registered, which then says who was there. */
+    registered: rows.some((row) => row.coachCheck !== null),
+    everyone: rows,
   };
 }
 
