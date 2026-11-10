@@ -46,7 +46,7 @@ Next.js 16 (App Router, Cache Components), React 19, TypeScript, Tailwind CSS v4
 | --- | --- |
 | `/` | Workouts |
 | `/traningar/[id]` | One workout: attendance, leveled groups, teams, spreading new players |
-| `/truppen` | The coaches with roles and phone numbers, then active players and their levels |
+| `/truppen` | The coaches with roles, emails and phone numbers, then active players and their levels |
 | `/installningar` | Keep-apart pairs and free-text grouping notes |
 | `/logga-in` | Email code login for coaches |
 | `/api/cron/sync-svenskalag` | Daily sync at 14:00 UTC, protected by `CRON_SECRET` |

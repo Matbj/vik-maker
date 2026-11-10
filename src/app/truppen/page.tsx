@@ -37,6 +37,7 @@ async function Team() {
         id: schema.coaches.id,
         name: schema.coaches.name,
         phone: schema.coaches.phone,
+        email: schema.coaches.email,
         role: schema.coaches.role,
       })
       .from(schema.coaches)
@@ -65,7 +66,13 @@ async function Team() {
               <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-3">
                 <span className="min-w-0">
                   <span className="block">{c.name}</span>
-                  {c.role && <span className="block text-sm text-muted">{c.role}</span>}
+                  {(c.role || c.email) && (
+                    <span className="block text-sm break-words text-muted">
+                      {c.role}
+                      {c.role && c.email && " · "}
+                      {c.email && <a href={`mailto:${c.email}`}>{c.email}</a>}
+                    </span>
+                  )}
                 </span>
                 {c.phone ? (
                   <a href={`tel:${c.phone.replace(/[^\d+]/g, "")}`} className="shrink-0 text-accent underline">
