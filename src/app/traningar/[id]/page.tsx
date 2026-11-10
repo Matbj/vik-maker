@@ -25,7 +25,7 @@ const DEFAULT_PLAYERS_PER_TEAM = 7;
 // Claude can take a while to compute leveled groups.
 export const maxDuration = 180;
 
-const ABSENT_AS = { attending: "Kom inte", declined: "Kan ej", unanswered: "Inget svar" } as const;
+const ABSENT_AS = { attending: "Uteblev", declined: "Kan ej", unanswered: "Inget svar" } as const;
 
 
 const timeFormat = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" });
