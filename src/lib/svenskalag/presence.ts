@@ -28,6 +28,9 @@ export type PushOutcome = "disabled" | "busy" | "current" | "saved" | "failed";
  * Only one save runs at a time per workout, and it keeps going until it has sent the newest
  * version. A failure is stored on the workout for the page to show, and never thrown.
  *
+ * What was changed on svenskalag.se since our last save is first taken into our database, so
+ * the list sent holds both sides' changes.
+ *
  * `verify` reads the list back after saving. `retry` saves even when nothing looks to be waiting.
  */
 export async function pushPresence(
@@ -62,15 +65,31 @@ export async function pushPresence(
       if (ours.withoutSvenskalagId > 0) throw missingOnSvenskalag(ours.withoutSvenskalagId);
 
       const form = await client.fetchPresenceForm(leased.svenskalagId);
-      const theirs = trackedIds(form.groups);
-      // Someone changed the attendance on svenskalag.se since our last save, and this one replaces it.
-      const overwrote = !sameIds(theirs, new Set(ours.pushedIds ?? [])) && !sameIds(theirs, ours.ids);
+      const listed = trackedIds(form.groups);
+      const theirs = new Set([...listed].filter((id) => ours.known.has(id)));
+      // Without a last save there is nothing to tell their changes from ours by, so ours replaces theirs.
+      const present = ours.pushedIds ? mergePresence(new Set(ours.pushedIds), theirs, ours.ids) : ours.ids;
+      const overwrote = !ours.pushedIds && theirs.size > 0 && !sameIds(theirs, ours.ids);
 
-      if (!sameIds(theirs, ours.ids)) {
-        await client.savePresence(leased.svenskalagId, buildGroups(form, ours.ids));
+      if (!sameIds(present, ours.ids)) {
+        const taken = await takeTheirChanges(workoutId, ours.version, {
+          present: [...present].filter((id) => !ours.ids.has(id)),
+          absent: [...ours.ids].filter((id) => !present.has(id)),
+        });
+        if (!taken) {
+          // Edited here meanwhile. The next round merges again from what is there now.
+          await db.update(workouts).set({ presencePushLeaseUntil: LEASE }).where(eq(workouts.id, workoutId));
+          continue;
+        }
+      }
+
+      if (!sameIds(theirs, present)) {
+        // Someone present there whom we don't know yet stays, as a sync hasn't brought them here.
+        const sent = new Set([...present, ...[...listed].filter((id) => !ours.known.has(id))]);
+        await client.savePresence(leased.svenskalagId, buildGroups(form, sent));
         if (verify) {
           const saved = trackedIds((await client.fetchPresenceForm(leased.svenskalagId)).groups);
-          if (!sameIds(saved, ours.ids)) throw new Error("svenskalag.se holds another attendance list than the one saved");
+          if (!sameIds(saved, sent)) throw new Error("svenskalag.se holds another attendance list than the one saved");
         }
       }
 
@@ -80,7 +99,7 @@ export async function pushPresence(
         .set({
           presencePushedVersion: sql`greatest(${workouts.presencePushedVersion}, ${ours.version})`,
           presencePushedAt: now,
-          presencePushedIds: [...ours.ids].sort(),
+          presencePushedIds: [...present].sort(),
           presencePushError: null,
           ...(overwrote ? { presenceOverwroteAt: now } : {}),
           // Released in the same statement as the check, so an edit can't slip in between.
@@ -125,7 +144,15 @@ async function loadPresence(workoutId: string) {
         from workout_coach_attendance a
         join coaches c on c.id = a.coach_id
         where a.workout_id = w.id and a.coach_check = 'present'
-      ) as coaches
+      ) as coaches,
+      (
+        select coalesce(json_agg(svenskalag_id), '[]'::json)
+        from (
+          select svenskalag_id from players where svenskalag_id is not null
+          union
+          select svenskalag_id from coaches
+        ) members
+      ) as known
     from workouts w
     where w.id = ${workoutId}
   `);
@@ -137,6 +164,7 @@ async function loadPresence(workoutId: string) {
         failed: boolean;
         players: (string | null)[];
         coaches: (string | null)[];
+        known: string[];
       }
     | undefined;
   if (!row) throw new Error(`workout ${workoutId} is gone`);
@@ -149,8 +177,63 @@ async function loadPresence(workoutId: string) {
     pushedIds: row.pushed_ids,
     failed: row.failed,
     ids,
+    /** Every player and coach we have, by svenskalag.se id. */
+    known: new Set(row.known),
     withoutSvenskalagId: present.length - ids.size,
   };
+}
+
+/**
+ * Who is present when both sides have changed the list since `base`, the last one saved.
+ * Someone we changed keeps our value and everyone else gets theirs. Present or absent are
+ * the only values, so when both sides changed the same person they already agree.
+ */
+function mergePresence(base: Set<string>, theirs: Set<string>, ours: Set<string>) {
+  const merged = new Set<string>();
+  for (const id of new Set([...base, ...theirs, ...ours])) {
+    const changedHere = ours.has(id) !== base.has(id);
+    if (changedHere ? ours.has(id) : theirs.has(id)) merged.add(id);
+  }
+  return merged;
+}
+
+/**
+ * Writes the checks that were changed on svenskalag.se to our database, by svenskalag.se id.
+ * Only while the workout is at `version`, tested and locked in the same statement, so a tap
+ * made meanwhile is never replaced. The version stays, as these are not ours to save back.
+ */
+async function takeTheirChanges(workoutId: string, version: number, changes: { present: string[]; absent: string[] }) {
+  const present = sql`(select jsonb_array_elements_text(${JSON.stringify(changes.present)}::jsonb))`;
+  const changed = sql`(select jsonb_array_elements_text(${JSON.stringify([...changes.present, ...changes.absent])}::jsonb))`;
+  const { rows } = await getDb().execute(sql`
+    with unedited as (
+      select id from workouts
+      where id = ${workoutId}::uuid and presence_version = ${version}
+      for update
+    ),
+    taken_players as (
+      insert into workout_attendance (workout_id, player_id, coach_check)
+      select ${workoutId}::uuid, p.id,
+        (case when p.svenskalag_id in ${present} then 'present' else 'absent' end)::coach_check
+      from players p
+      where p.svenskalag_id in ${changed} and exists (select 1 from unedited)
+      on conflict (workout_id, player_id)
+      do update set coach_check = excluded.coach_check, updated_at = now()
+      returning 1
+    ),
+    taken_coaches as (
+      insert into workout_coach_attendance (workout_id, coach_id, coach_check)
+      select ${workoutId}::uuid, c.id,
+        (case when c.svenskalag_id in ${present} then 'present' else 'absent' end)::coach_check
+      from coaches c
+      where c.svenskalag_id in ${changed} and exists (select 1 from unedited)
+      on conflict (workout_id, coach_id)
+      do update set coach_check = excluded.coach_check, updated_at = now()
+      returning 1
+    )
+    select (select count(*) from unedited)::int as unedited
+  `);
+  return (rows[0] as { unedited: number }).unedited > 0;
 }
 
 /** The players and coaches saved as present. Other kinds of members are left as they are. */
