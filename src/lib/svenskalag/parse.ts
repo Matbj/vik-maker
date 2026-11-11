@@ -74,21 +74,27 @@ export function calendarMonthPath(date: Date) {
   return `${date.getUTCFullYear()}/${MONTHS[date.getUTCMonth()]}`;
 }
 
-/** Trainings from one month's calendar page. Matches, camps and meetings are left out. */
+/**
+ * Every activity on one month's calendar page, whatever it is called: trainings, camps,
+ * meetings and the rest. Matches are left out, as they have pages of their own under
+ * `/match/` that this client doesn't read.
+ */
 export function parseCalendarMonth(
   html: string,
   year: number,
   month: number,
 ): SvenskalagWorkout[] {
   const workouts: SvenskalagWorkout[] = [];
+  // Only a day's first activity shows the day. The ones after it leave that cell empty.
+  let day: string | undefined;
 
   for (const chunk of html.split(/<tr id="[^"]*" class="clickable-row/).slice(1)) {
     const row = chunk.split("</tr>")[0];
     const title = decodeHtml(row.match(/class="activity-name">([^<]+)/)?.[1] ?? "").trim();
-    if (!/^träning\b/i.test(title)) continue;
 
     const id = row.match(/\/aktivitet\/(\d+)\//)?.[1];
-    const day = row.match(/<b>(\d+)<\/b>/)?.[1];
+    day = row.match(/<b>(\d+)<\/b>/)?.[1] ?? day;
+    if (!id && /\/match\/\d+\//.test(row)) continue;
     const times = row.match(/(\d{2}:\d{2})\s*(?:<br>\s*<span class="text-muted">(\d{2}:\d{2}))?/);
     if (!id || !day || !times) throw new SvenskalagParseError(`calendar row for "${title}"`);
 
