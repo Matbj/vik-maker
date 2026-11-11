@@ -196,10 +196,13 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       )}
       <header>
         <div className="flex items-start justify-between gap-3">
-          <p className="min-w-0 text-sm text-muted">
-            <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
-            {workout.location && ` · ${workout.location}`}
-          </p>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold break-words">{workout.title}</h2>
+            <p className="text-sm text-muted">
+              <span className="inline-block text-base font-medium text-foreground first-letter:uppercase">{whenFormat.format(workout.startsAt)}</span>
+              {workout.location && ` · ${workout.location}`}
+            </p>
+          </div>
           <RefreshAttendanceButton workoutId={id} fetchedAt={recently(workout.syncedAt, now)} />
         </div>
       </header>
