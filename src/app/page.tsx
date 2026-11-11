@@ -166,23 +166,19 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
 
 /** How a workout's närvaro stands against svenskalag.se, where the coaches otherwise look it up. */
 function PresenceSyncStatus({ workout: w }: { workout: WorkoutRow }) {
-  const badge = "mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-semibold";
-  const neutral = `${badge} border border-black/15 text-muted dark:border-white/20`;
+  // Plain small text like the row's other details. Only a failed save stands out.
+  const neutral = "text-xs text-muted";
   if (w.liveStartedAt) {
     if (!presencePushEnabled()) {
       return <p className={neutral}>Närvaron sparas inte i svenskalag.se</p>;
     }
     if (w.presencePushError) {
-      return (
-        <p className={`${badge} bg-red-500/10 text-red-700 dark:text-red-400`}>
-          Närvaron kunde inte sparas i svenskalag.se
-        </p>
-      );
+      return <p className="text-xs text-red-700 dark:text-red-400">Närvaron kunde inte sparas i svenskalag.se</p>;
     }
     if (w.presencePushedVersion < w.presenceVersion) {
       return <p className={neutral}>Närvaron väntar på att sparas i svenskalag.se</p>;
     }
-    return <p className={`${badge} bg-accent text-on-accent`}>Närvaron sparad i svenskalag.se</p>;
+    return <p className={neutral}>Närvaron sparad i svenskalag.se</p>;
   }
   if (w.present + w.absent > 0) {
     return <p className={neutral}>Närvaron hämtad från svenskalag.se</p>;
