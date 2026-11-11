@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { SvenskalagClient } from "./client";
+import { pruneAuditLog } from "@/lib/audit";
 import { presencePushEnabled, pushPresence } from "./presence";
 import type { SvenskalagAttendance } from "./types";
 
@@ -10,6 +11,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Recent workouts, so late attendance checks are picked up, plus the coming weeks. */
 export function defaultSyncRange(now = new Date()) {
   return { from: new Date(now.getTime() - 14 * DAY_MS), to: new Date(now.getTime() + 28 * DAY_MS) };
+}
+
+/** The whole daily sync, as the cron job and the button on the Settings page run it. */
+export async function runDailySync() {
+  // First, so a failing sync doesn't keep old entries around.
+  const auditEntriesRemoved = await pruneAuditLog();
+  return { ...(await syncWorkouts(defaultSyncRange())), auditEntriesRemoved };
 }
 
 /**

@@ -1,6 +1,5 @@
-import { pruneAuditLog } from "@/lib/audit";
 import { env } from "@/lib/env";
-import { defaultSyncRange, syncWorkouts } from "@/lib/svenskalag/sync";
+import { runDailySync } from "@/lib/svenskalag/sync";
 
 export const maxDuration = 300;
 
@@ -10,7 +9,5 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  // First, so a failing sync doesn't keep old entries around.
-  const auditEntriesRemoved = await pruneAuditLog();
-  return Response.json({ ...(await syncWorkouts(defaultSyncRange())), auditEntriesRemoved });
+  return Response.json(await runDailySync());
 }

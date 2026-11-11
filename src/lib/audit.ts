@@ -10,6 +10,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const AUDIT_ACTIONS = {
   login: "Loggade in",
   logout: "Loggade ut",
+  "sync.run": "Synkade med svenskalag.se",
   "attendance.refresh": "Hämtade svaren från svenskalag.se",
   "workout.start": "Startade träningen",
   "attendance.set": "Ändrade närvaron",
