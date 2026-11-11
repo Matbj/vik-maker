@@ -5,9 +5,35 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { playerRef, recordAudit } from "@/lib/audit";
+import { UserError } from "@/lib/errors";
 import { GROUPING_NOTES_KEY } from "@/lib/grouping/preferences";
+import { runDailySync } from "@/lib/svenskalag/sync";
 
 export type SettingsState = { error?: string; saved?: boolean };
+
+export type SyncState = { error?: string; workouts?: number };
+
+/** Runs the daily sync now, for a coach who doesn't want to wait for it. */
+export async function syncNow(): Promise<SyncState> {
+  try {
+    const result = await runDailySync();
+    revalidatePath("/", "layout");
+    await recordAudit("sync.run", () => ({
+      workouts: result.workouts,
+      players: result.players,
+      coaches: result.coaches,
+    }));
+    return { workouts: result.workouts };
+  } catch (error) {
+    console.error("the sync started from the settings page failed:", error);
+    return {
+      error:
+        error instanceof UserError
+          ? error.message
+          : "Synkningen med svenskalag.se misslyckades. Försök igen om en liten stund.",
+    };
+  }
+}
 
 const pairForm = z.object({ playerA: z.uuid(), playerB: z.uuid() });
 

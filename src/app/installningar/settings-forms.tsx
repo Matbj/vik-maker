@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { addSeparation, saveGroupingNotes } from "./actions";
+import { addSeparation, saveGroupingNotes, syncNow } from "./actions";
 
 const fieldClass =
   "rounded-lg border border-black/10 bg-transparent px-2 py-2 text-sm dark:border-white/10";
@@ -38,6 +38,28 @@ export function AddSeparationForm({ players }: { players: { id: string; name: st
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {state.error}
         </p>
+      )}
+    </form>
+  );
+}
+
+export function SyncForm() {
+  const [state, action, pending] = useActionState(syncNow, {});
+  return (
+    <form action={action} className="flex flex-wrap items-center gap-3">
+      <button type="submit" disabled={pending} className={buttonClass}>
+        {pending ? "Synkar…" : "Synka nu"}
+      </button>
+      {pending && <span className="text-sm text-muted">Det kan ta någon minut.</span>}
+      {state.workouts !== undefined && !pending && (
+        <span className="text-sm text-muted">
+          Klart, {state.workouts} {state.workouts === 1 ? "träning" : "träningar"} synkade
+        </span>
+      )}
+      {state.error && !pending && (
+        <span role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {state.error}
+        </span>
       )}
     </form>
   );

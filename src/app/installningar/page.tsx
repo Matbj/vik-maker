@@ -8,7 +8,10 @@ import { LogoutButton } from "@/components/logout-button";
 import { Notice } from "@/components/notice";
 import { loadGroupingPreferences } from "@/lib/grouping/preferences";
 import { removeSeparation } from "./actions";
-import { AddSeparationForm, GroupingNotesForm } from "./settings-forms";
+import { AddSeparationForm, GroupingNotesForm, SyncForm } from "./settings-forms";
+
+// The sync started from here reads every workout from svenskalag.se, like the daily one.
+export const maxDuration = 300;
 
 export default function SettingsPage() {
   return (
@@ -19,6 +22,13 @@ export default function SettingsPage() {
       <LogoutButton />
     </section>
   );
+}
+
+/** When the daily sync in `vercel.json` runs, 14:00 UTC, on a Swedish clock. */
+function dailySyncTime() {
+  const at = new Date();
+  at.setUTCHours(14, 0, 0, 0);
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit" }).format(at);
 }
 
 async function Settings() {
@@ -88,6 +98,17 @@ async function Settings() {
           </p>
         </div>
         <GroupingNotesForm initialNotes={notes} />
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Synkning</h2>
+          <p className="text-sm text-muted">
+            Träningar, svar, närvaro och ledare hämtas från svenskalag.se varje dag klockan{" "}
+            {dailySyncTime()}. Här kan du hämta dem direkt.
+          </p>
+        </div>
+        <SyncForm />
       </div>
     </div>
   );
