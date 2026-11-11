@@ -46,7 +46,7 @@ Next.js 16 (App Router, Cache Components), React 19, TypeScript, Tailwind CSS v4
 | Route | Purpose |
 | --- | --- |
 | `/` | Workouts: today's, upcoming and the last 14 days, each marked with how its närvaro stands against svenskalag.se (saved, waiting, failed, not saved, fetched from there, or none taken) |
-| `/traningar/[id]` | One workout: attendance, starting it and checking off who is there, leveled groups, teams, spreading new players |
+| `/traningar/[id]` | One workout: its title from svenskalag.se, attendance, starting it and checking off who is there, leveled groups, teams, spreading new players |
 | `/truppen` | The coaches with roles, emails and phone numbers, then active players and their levels |
 | `/installningar` | Keep-apart pairs, free-text grouping notes and a button that runs the daily sync now |
 | `/installningar/logging` | The audit log, newest first. Requires a login like every page, but nothing links to it |
