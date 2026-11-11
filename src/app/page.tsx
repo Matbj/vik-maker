@@ -164,28 +164,42 @@ function WorkoutList({ workouts }: { workouts: WorkoutRow[] }) {
   );
 }
 
-/** How a workout's närvaro stands against svenskalag.se, where the coaches otherwise look it up. */
+const SYNC_TONES = {
+  saved: "text-green-700 dark:text-green-400",
+  waiting: "text-amber-700 dark:text-amber-400",
+  failed: "text-red-700 dark:text-red-400",
+  quiet: "text-muted",
+};
+
+/**
+ * How a workout's närvaro stands against svenskalag.se, where the coaches otherwise look it up.
+ * Small text like the row's other details, with a colored mark in front that tells the states
+ * apart at a glance. Only a failed save colors the text too.
+ */
 function PresenceSyncStatus({ workout: w }: { workout: WorkoutRow }) {
-  // Plain small text like the row's other details. Only a failed save stands out.
-  const neutral = "text-xs text-muted";
+  const status = presenceSyncStatus(w);
+  if (!status) return null;
+  return (
+    <p className={`text-xs ${status.tone === "failed" ? SYNC_TONES.failed : "text-muted"}`}>
+      <span aria-hidden="true" className={`mr-1 inline-block w-3 text-center font-bold ${SYNC_TONES[status.tone]}`}>
+        {status.mark}
+      </span>
+      {status.text}
+    </p>
+  );
+}
+
+function presenceSyncStatus(w: WorkoutRow): { mark: string; tone: keyof typeof SYNC_TONES; text: string } | null {
   if (w.liveStartedAt) {
-    if (!presencePushEnabled()) {
-      return <p className={neutral}>Närvaron sparas inte i svenskalag.se</p>;
-    }
-    if (w.presencePushError) {
-      return <p className="text-xs text-red-700 dark:text-red-400">Närvaron kunde inte sparas i svenskalag.se</p>;
-    }
+    if (!presencePushEnabled()) return { mark: "–", tone: "quiet", text: "Närvaron sparas inte i svenskalag.se" };
+    if (w.presencePushError) return { mark: "!", tone: "failed", text: "Närvaron kunde inte sparas i svenskalag.se" };
     if (w.presencePushedVersion < w.presenceVersion) {
-      return <p className={neutral}>Närvaron väntar på att sparas i svenskalag.se</p>;
+      return { mark: "↑", tone: "waiting", text: "Närvaron väntar på att sparas i svenskalag.se" };
     }
-    return <p className={neutral}>Närvaron sparad i svenskalag.se</p>;
+    return { mark: "✓", tone: "saved", text: "Närvaron sparad i svenskalag.se" };
   }
-  if (w.present + w.absent > 0) {
-    return <p className={neutral}>Närvaron hämtad från svenskalag.se</p>;
-  }
-  if (w.startsAt < new Date()) {
-    return <p className={neutral}>Ingen närvaro tagen</p>;
-  }
+  if (w.present + w.absent > 0) return { mark: "↓", tone: "quiet", text: "Närvaron hämtad från svenskalag.se" };
+  if (w.startsAt < new Date()) return { mark: "○", tone: "quiet", text: "Ingen närvaro tagen" };
   return null;
 }
 
