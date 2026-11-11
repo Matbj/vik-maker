@@ -195,7 +195,9 @@ export function AttendanceList({
 
   const isHere = (person: PersonRow) => (attendance ? attendance.isPresent(kind, person.id) : person.present);
   const answerOf = (person: PersonRow) => ANSWERS[person.answer ?? "none"];
-  const rows = [...people].sort((a, b) => answerOf(a).order - answerOf(b).order || a.name.localeCompare(b.name, "sv"));
+  // Among the players, those who haven't answered come first, as they are the ones to chase.
+  const orderOf = (person: PersonRow) => (kind === "player" && person.answer === "unanswered" ? -1 : answerOf(person).order);
+  const rows = [...people].sort((a, b) => orderOf(a) - orderOf(b) || a.name.localeCompare(b.name, "sv"));
   const here = rows.filter(isHere);
   const count = (answer: PersonRow["answer"]) => people.filter((person) => person.answer === answer).length;
   const asked = people.filter((person) => person.answer !== null).length;
