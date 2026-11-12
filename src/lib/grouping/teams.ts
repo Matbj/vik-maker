@@ -87,6 +87,33 @@ function canSum(numbers: number[], target: number): boolean {
   return reachable.has(target);
 }
 
+/**
+ * Teams that play each other are even when every home level is spread across them, so
+ * within a league no team may have two more players of a level than another.
+ */
+export function findLevelBalanceProblems(
+  teams: ProposedTeam[],
+  players: GroupingPlayer[],
+  levelOrder: string[],
+  leagueCount: number,
+): string[] {
+  const levelOf = new Map(players.map((p) => [p.id, p.levelCode]));
+  const leagues = leagueCount > 1 ? leagueNumbers(leagueCount) : [null];
+  return leagues.flatMap((league) => {
+    const leagueTeams = teams.filter((t) => leagueCount === 1 || t.league === league);
+    if (leagueTeams.length < 2) return [];
+    const where = league === null ? "the teams" : `the teams in league ${league}`;
+    return levelOrder.flatMap((level) => {
+      const counts = leagueTeams.map((t) => t.playerIds.filter((id) => levelOf.get(id) === level).length);
+      return Math.max(...counts) - Math.min(...counts) > 1
+        ? [
+            `The ${level} players are spread unevenly over ${where}: ${counts.join(", ")}. Spread each level evenly so every team gets a similar mix and the games are close.`,
+          ]
+        : [];
+    });
+  });
+}
+
 /** The strongest and weakest levels shouldn't share a league, but headcounts can force it. */
 export function findLeagueMixProblems(
   teams: ProposedTeam[],
