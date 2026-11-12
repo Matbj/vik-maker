@@ -113,7 +113,7 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
       </div>
 
       <dl className="grid grid-cols-2 gap-2">
-        <Stat label="Betalt" value={formatKronor(value((counts) => counts.paid))} accent />
+        <Stat label="Insamlat" value={formatKronor(value((counts) => counts.paid))} accent />
         <Stat
           label="Kvar ute"
           value={`${left} ${ticketWord(left)}`}
