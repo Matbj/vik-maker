@@ -15,7 +15,13 @@ import {
   type SpreadGroup,
   type SpreadPlacement,
 } from "./level-groups";
-import { findLeagueMixProblems, findTeamProblems, leagueSizes, type ProposedTeam } from "./teams";
+import {
+  findLeagueMixProblems,
+  findTeamProblems,
+  findUnevenLeagueProblems,
+  leagueSizes,
+  type ProposedTeam,
+} from "./teams";
 import type { PlayerWithHistory } from "./workout-players";
 
 const ATTEMPTS = 3;
@@ -40,7 +46,7 @@ const TEAMS_PROMPT = `You split the youth football players at one training sessi
 
 Use exactly teamCount teams, put every player on exactly one team, and make team sizes differ by at most one. Make the teams even in strength by giving each team a similar mix of home levels, so the games are close.
 
-If leagueCount is 2 or 3, split the teams into that many leagues by strength: league 1 gets the strongest players, league 2 the next, and league 3, if there is one, the weakest. "teamsPerLeague" gives how many teams each league has, league 1 first. Set "league" to the league's number on every team. Teams within a league should be even with each other, and a C player shouldn't share a league with A players. If leagueCount is 1, set "league" to null.
+If leagueCount is 2 or 3, split the teams into that many leagues by strength: league 1 gets the strongest players, league 2 the next, and league 3, if there is one, the weakest. "teamsPerLeague" gives how many teams each league has, league 1 first. Set "league" to the league's number on every team. Teams within a league play each other, so give them exactly the same number of players, such as 4 v 4 rather than 5 v 4, and keep them even in strength. When the players don't divide evenly, move a player or two between neighbouring leagues so that whole leagues get the bigger teams, and leave at most one league with uneven teams. A C player shouldn't share a league with A players. If leagueCount is 1, set "league" to null.
 
 "recentTeams" lists the teams from recent workouts, newest first. Avoid putting the same players together again when you can, so everyone gets to play with different teammates.
 
@@ -203,6 +209,7 @@ export async function proposeTeams(
     ({ teams: proposed }) => [
       ...findSeparationProblems(proposed, keepApart),
       ...findLeagueMixProblems(proposed, anonymous, levelOrder, options.leagueCount),
+      ...findUnevenLeagueProblems(proposed, options.leagueCount),
     ],
   );
   return teams

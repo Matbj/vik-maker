@@ -50,13 +50,41 @@ export function findTeamProblems(
     }
   }
 
-  for (const league of leagueCount > 1 ? leagues : [teams[0]?.league ?? null]) {
-    const sizes = teams.filter((t) => leagueCount === 1 || t.league === league).map((t) => t.playerIds.length);
-    if (sizes.length > 0 && Math.max(...sizes) - Math.min(...sizes) > 1) {
-      problems.push(`Team sizes must differ by at most one, but they are ${sizes.join(", ")}.`);
-    }
+  const sizes = teams.map((t) => t.playerIds.length);
+  if (sizes.length > 0 && Math.max(...sizes) - Math.min(...sizes) > 1) {
+    problems.push(`Team sizes must differ by at most one, but they are ${sizes.join(", ")}.`);
   }
   return problems;
+}
+
+/**
+ * Games are fairest when both sides have as many players, so every league should have
+ * teams of one size. When the players don't divide evenly, only one league may be uneven,
+ * and none if whole leagues can take the bigger teams.
+ */
+export function findUnevenLeagueProblems(teams: ProposedTeam[], leagueCount: number): string[] {
+  const leagues = leagueCount > 1 ? leagueNumbers(leagueCount) : [null];
+  const teamsByLeague = leagues.map((league) => teams.filter((t) => leagueCount === 1 || t.league === league));
+  const uneven = teamsByLeague.filter((leagueTeams) => new Set(leagueTeams.map((t) => t.playerIds.length)).size > 1);
+
+  const playerCount = teams.reduce((sum, t) => sum + t.playerIds.length, 0);
+  const biggerTeams = teams.length > 0 ? playerCount % teams.length : 0;
+  const allowed = canSum(teamsByLeague.map((leagueTeams) => leagueTeams.length), biggerTeams) ? 0 : 1;
+  if (uneven.length <= allowed) return [];
+
+  const sizes = teamsByLeague.map((leagueTeams) => leagueTeams.map((t) => t.playerIds.length).join(" v "));
+  return [
+    allowed === 0
+      ? `Every league should have teams of the same size, but they are ${sizes.join("; ")}. Move players between neighbouring leagues so each league's teams are equal.`
+      : `Only one league should have teams of different sizes, but they are ${sizes.join("; ")}. Move players between neighbouring leagues so the other leagues' teams are equal.`,
+  ];
+}
+
+/** Whether some of the numbers add up to exactly the target. */
+function canSum(numbers: number[], target: number): boolean {
+  let reachable = new Set([0]);
+  for (const n of numbers) reachable = new Set([...reachable, ...[...reachable].map((sum) => sum + n)]);
+  return reachable.has(target);
 }
 
 /** The strongest and weakest levels shouldn't share a league, but headcounts can force it. */
