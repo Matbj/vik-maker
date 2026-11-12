@@ -10,12 +10,13 @@ const RENEW_MARGIN_MS = 10_000;
 const RETRY_MS = 5_000;
 /** Collects the rows of one transaction, and the coach's own action, into one refresh. */
 const REFRESH_DELAY_MS = 300;
-/** Short gaps, such as a renewal or a quick reconnect, don't need a notice. */
-const OFFLINE_NOTICE_DELAY_MS = 5_000;
+/** A notice waits this long, so a quick connect or reconnect shows nothing. */
+const CONNECTING_NOTICE_DELAY_MS = 2_000;
+const RECONNECTING_NOTICE_DELAY_MS = 5_000;
 
 /**
  * Re-renders the page when its data changes elsewhere, such as another coach moving a player
- * or a sync. Shows a notice while the updates are cut off. The first queries come with the
+ * or a sync. Shows a notice while it connects or reconnects. The first queries come with the
  * page, and later ones from the renew route, which requires a logged-in coach.
  */
 export function LiveUpdates({
@@ -30,7 +31,11 @@ export function LiveUpdates({
   const router = useRouter();
   // The page sends new queries on every refresh, but the subscriptions renew their own.
   const firstQueries = useRef(initialQueries);
-  const [offline, setOffline] = useState(false);
+  // The kind stays while the notice fades out.
+  const [notice, setNotice] = useState<{ kind: "connecting" | "reconnecting"; visible: boolean }>({
+    kind: "connecting",
+    visible: false,
+  });
 
   useEffect(() => {
     const client = createRealtimeClient({ url, logLevel: "warn" });
@@ -40,6 +45,7 @@ export function LiveUpdates({
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let noticeTimer: ReturnType<typeof setTimeout> | undefined;
     let denied = false;
+    let wasLive = false;
 
     const checkConnection = () => {
       const live =
@@ -48,11 +54,16 @@ export function LiveUpdates({
           subscriptions.length > 0 &&
           subscriptions.every((subscription) => subscription.getState().status === "live"));
       if (live) {
+        wasLive ||= !denied;
         clearTimeout(noticeTimer);
         noticeTimer = undefined;
-        setOffline(false);
-      } else {
-        noticeTimer ??= setTimeout(() => setOffline(true), OFFLINE_NOTICE_DELAY_MS);
+        setNotice((current) => (current.visible ? { ...current, visible: false } : current));
+      } else if (!noticeTimer) {
+        const kind = wasLive ? "reconnecting" : "connecting";
+        noticeTimer = setTimeout(
+          () => setNotice({ kind, visible: true }),
+          wasLive ? RECONNECTING_NOTICE_DELAY_MS : CONNECTING_NOTICE_DELAY_MS,
+        );
       }
     };
 
@@ -158,7 +169,13 @@ export function LiveUpdates({
     window.addEventListener("online", checkConnection);
     window.addEventListener("offline", checkConnection);
 
-    subscribe(firstQueries.current);
+    // A page restored from the router's cache can come with queries that have already expired.
+    const first = firstQueries.current;
+    if (Math.min(...Object.values(first).map((query) => query.expiresAt)) - Date.now() > RENEW_MARGIN_MS) {
+      subscribe(first);
+    } else {
+      restart(0);
+    }
 
     return () => {
       stopped = true;
@@ -172,10 +189,16 @@ export function LiveUpdates({
     };
   }, [renewUrl, url, router]);
 
-  if (!offline) return null;
+  // Floats above the tab bar, so showing it never moves the page.
   return (
-    <p role="status" className="rounded-lg bg-amber-500/15 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
-      Ingen anslutning. Sidan visar inte andras ändringar förrän du är uppkopplad igen.
+    <p
+      role="status"
+      aria-hidden={!notice.visible}
+      className={`pointer-events-none fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-full bg-foreground px-4 py-2 text-sm text-background shadow-lg transition-opacity duration-300 ${
+        notice.visible ? "opacity-90" : "opacity-0"
+      }`}
+    >
+      {notice.kind === "connecting" ? "Ansluter realtidssynk…" : "Försöker återansluta…"}
     </p>
   );
 }
