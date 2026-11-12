@@ -222,20 +222,17 @@ export async function deleteLottery(formData: FormData) {
   redirect("/truppen/lotter");
 }
 
-/**
- * Hands every kind's usual number of tickets to one player, or to every active player,
- * who hasn't been handed any tickets in the sale yet.
- */
+/** Hands every kind's usual number of tickets to a player who hasn't been handed any in the sale yet. */
 export async function handOutUsual(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
   const form = z
-    .object({ lotteryId: z.uuid(), playerId: optional(z.uuid()) })
+    .object({ lotteryId: z.uuid(), playerId: z.uuid() })
     .safeParse(Object.fromEntries(formData));
   if (!form.success) return { error: "Det gick inte att dela ut lotterna. Ladda om sidan och försök igen." };
   const { lotteryId, playerId } = form.data;
 
   try {
     const lottery = await openLottery(lotteryId);
-    // One statement, so a player another coach handed tickets to meanwhile keeps theirs.
+    // One statement, so tickets another coach handed the player meanwhile are kept.
     const { rows } = await getDb().execute(sql`
       insert into lottery_tickets (kind_id, player_id, handed_out)
       select k.id, p.id, k.tickets_per_player
@@ -244,7 +241,7 @@ export async function handOutUsual(_previous: LotteryState, formData: FormData):
       join lotteries l on l.id = k.lottery_id and l.closed_at is null
       where k.lottery_id = ${lotteryId}
         and k.tickets_per_player is not null
-        and ${playerId ? sql`p.id = ${playerId}` : sql`p.active`}
+        and p.id = ${playerId}
         and not exists (
           select 1 from lottery_tickets t
           join lottery_kinds tk on tk.id = t.kind_id
@@ -255,18 +252,15 @@ export async function handOutUsual(_previous: LotteryState, formData: FormData):
         where lottery_tickets.handed_out = 0
       returning player_id
     `);
-    const playerIds = [...new Set(rows.map((row) => String(row.player_id)))];
-    if (playerId && playerIds.length === 0) throw new UserError(ticketsChangedElsewhere);
-    if (playerIds.length > 0) {
-      const kinds = await loadKinds(lotteryId);
-      await recordAudit("lottery.hand_out", async () => ({
-        lottery: { id: lottery.id, name: lottery.name },
-        kinds: kinds
-          .filter((kind) => kind.ticketsPerPlayer !== null)
-          .map((kind) => ({ id: kind.id, name: kind.name, tickets: kind.ticketsPerPlayer })),
-        players: await Promise.all(playerIds.map(playerRef)),
-      }));
-    }
+    if (rows.length === 0) throw new UserError(ticketsChangedElsewhere);
+    const kinds = await loadKinds(lotteryId);
+    await recordAudit("lottery.hand_out", async () => ({
+      lottery: { id: lottery.id, name: lottery.name },
+      player: await playerRef(playerId),
+      kinds: kinds
+        .filter((kind) => kind.ticketsPerPlayer !== null)
+        .map((kind) => ({ id: kind.id, name: kind.name, tickets: kind.ticketsPerPlayer })),
+    }));
   } catch (error) {
     return errorState(error, "Det gick inte att dela ut lotterna. Försök igen.");
   }

@@ -156,31 +156,6 @@ function kindsSentence(kinds: LotteryKindInfo[]) {
     .join(" och ");
 }
 
-export function HandOutToAllForm({
-  lotteryId,
-  kinds,
-  playersWithout,
-}: {
-  lotteryId: string;
-  kinds: LotteryKindInfo[];
-  playersWithout: number;
-}) {
-  const [state, action, pending] = useActionState(handOutUsual, {});
-  if (playersWithout === 0 || usualHandOut(kinds).length === 0) return null;
-  return (
-    <form action={action} className="space-y-2 rounded-xl border border-black/10 p-4 dark:border-white/10">
-      <input type="hidden" name="lotteryId" value={lotteryId} />
-      <p className="text-sm">
-        {playersWithout} spelare har inte fått några lotter än. Ge var och en {kindsSentence(kinds)}.
-      </p>
-      <button type="submit" disabled={pending} className={buttonClass}>
-        {pending ? "Delar ut…" : "Dela ut till alla dem"}
-      </button>
-      <FormError state={state} />
-    </form>
-  );
-}
-
 export type LotteryPlayer = { id: string; name: string; tickets: KindCounts };
 
 type Filter = "all" | TicketStatus;

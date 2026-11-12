@@ -10,7 +10,6 @@ import { realtimeUrl, sealLotteryLiveQueries } from "@/lib/realtime/live-queries
 import {
   formatDueOn,
   formatKronor,
-  playerTotals,
   sumTickets,
   ticketsLeft,
   ticketValue,
@@ -20,7 +19,6 @@ import {
 import {
   CloseLotteryButton,
   DeleteLotteryButton,
-  HandOutToAllForm,
   LotteryForm,
   LotteryPlayers,
   type LotteryPlayer,
@@ -96,7 +94,6 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
     all.reduce((sum, row) => sum + ticketValue(kinds, row, pick), 0);
   const totals = sumTickets(tickets);
   const left = ticketsLeft(totals);
-  const playersWithout = rows.filter((row) => playerTotals(kinds, row.tickets).handedOut === 0).length;
 
   return (
     <div className="space-y-6">
@@ -146,8 +143,6 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
           })}
         </tbody>
       </table>
-
-      {!closed && <HandOutToAllForm lotteryId={lottery.id} kinds={kinds} playersWithout={playersWithout} />}
 
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">Spelare</h2>
