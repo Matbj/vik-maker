@@ -229,32 +229,46 @@ export const appSettings = pgTable("app_settings", {
   ...timestamps,
 });
 
-/** A lottery sale, such as Bingolotter one autumn, where the players sell tickets for the team. */
-export const lotteries = pgTable(
-  "lotteries",
+/** A lottery sale, such as the Christmas sale, where the players sell tickets for the team. */
+export const lotteries = pgTable("lotteries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  /** The last day to pay for sold tickets and hand back the rest. */
+  dueOn: date("due_on"),
+  /** Set when the coaches have finished the sale. It is then only shown, not changed. */
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+/** One kind of ticket in a sale, such as Bingolotter, with its own price. */
+export const lotteryKinds = pgTable(
+  "lottery_kinds",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    /** What one ticket costs, in whole kronor. */
-    ticketPrice: integer("ticket_price").notNull(),
-    /** How many tickets a player is usually handed, offered when handing out. */
-    ticketsPerPlayer: integer("tickets_per_player"),
-    /** The last day to pay for sold tickets and hand back the rest. */
-    dueOn: date("due_on"),
-    /** Set when the coaches have finished the sale. It is then only shown, not changed. */
-    closedAt: timestamp("closed_at", { withTimezone: true }),
-    ...timestamps,
-  },
-  (t) => [check("lotteries_ticket_price_check", sql`${t.ticketPrice} >= 0`)],
-);
-
-/** The tickets one player has been handed in a lottery, and what has come back for them. */
-export const lotteryTickets = pgTable(
-  "lottery_tickets",
-  {
     lotteryId: uuid("lottery_id")
       .notNull()
       .references(() => lotteries.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** What one ticket costs, in whole kronor. */
+    ticketPrice: integer("ticket_price").notNull(),
+    /** How many tickets of this kind a player is usually handed. */
+    ticketsPerPlayer: integer("tickets_per_player"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    index("lottery_kinds_lottery_id_idx").on(t.lotteryId),
+    check("lottery_kinds_ticket_price_check", sql`${t.ticketPrice} >= 0`),
+  ],
+);
+
+/** The tickets of one kind a player has been handed, and what has come back for them. */
+export const lotteryTickets = pgTable(
+  "lottery_tickets",
+  {
+    kindId: uuid("kind_id")
+      .notNull()
+      .references(() => lotteryKinds.id, { onDelete: "cascade" }),
     playerId: uuid("player_id")
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
@@ -266,7 +280,7 @@ export const lotteryTickets = pgTable(
     ...timestamps,
   },
   (t) => [
-    primaryKey({ columns: [t.lotteryId, t.playerId] }),
+    primaryKey({ columns: [t.kindId, t.playerId] }),
     check(
       "lottery_tickets_counts_check",
       sql`${t.paid} >= 0 and ${t.returned} >= 0 and ${t.paid} + ${t.returned} <= ${t.handedOut}`,
@@ -297,3 +311,4 @@ export type Workout = typeof workouts.$inferSelect;
 export type NewWorkout = typeof workouts.$inferInsert;
 export type WorkoutGroup = typeof workoutGroups.$inferSelect;
 export type Lottery = typeof lotteries.$inferSelect;
+export type LotteryKind = typeof lotteryKinds.$inferSelect;

@@ -45,3 +45,36 @@ export function formatDueOn(dueOn: string) {
 export function ticketWord(count: number) {
   return count === 1 ? "lott" : "lotter";
 }
+
+/** One kind of ticket in a sale, such as Bingolotter. */
+export type LotteryKindInfo = { id: string; name: string; ticketPrice: number; ticketsPerPlayer: number | null };
+
+/** A player's tickets in a sale, by kind id. A kind they haven't been handed is missing. */
+export type KindCounts = Record<string, TicketCounts>;
+
+export const noTickets: TicketCounts = { handedOut: 0, paid: 0, returned: 0 };
+
+export function playerTotals(kinds: LotteryKindInfo[], tickets: KindCounts) {
+  return sumTickets(kinds.map((kind) => tickets[kind.id] ?? noTickets));
+}
+
+/** What the picked tickets are worth, such as `ticketsLeft` for what the player may still pay. */
+export function ticketValue(
+  kinds: LotteryKindInfo[],
+  tickets: KindCounts,
+  pick: (counts: TicketCounts) => number,
+) {
+  return kinds.reduce((sum, kind) => sum + pick(tickets[kind.id] ?? noTickets) * kind.ticketPrice, 0);
+}
+
+/** The kinds that have a usual number per player, which is what handing out gives. */
+export function usualHandOut(kinds: LotteryKindInfo[]) {
+  return kinds.filter((kind) => kind.ticketsPerPlayer !== null);
+}
+
+/** "Dela ut 20" for one kind, "Dela ut 10 + 15" for several. */
+export function handOutLabel(kinds: LotteryKindInfo[]) {
+  return `Dela ut ${usualHandOut(kinds)
+    .map((kind) => kind.ticketsPerPlayer)
+    .join(" + ")}`;
+}

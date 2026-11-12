@@ -2,18 +2,28 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { and, asc, eq, or, sql } from "drizzle-orm";
+import { asc, eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { LiveUpdates } from "@/components/live-updates";
 import { realtimeUrl, sealLotteryLiveQueries } from "@/lib/realtime/live-queries";
-import { formatDueOn, formatKronor, sumTickets, ticketsLeft, ticketWord } from "@/lib/lottery";
+import {
+  formatDueOn,
+  formatKronor,
+  playerTotals,
+  sumTickets,
+  ticketsLeft,
+  ticketValue,
+  ticketWord,
+  type TicketCounts,
+} from "@/lib/lottery";
 import {
   CloseLotteryButton,
   DeleteLotteryButton,
   HandOutToAllForm,
   LotteryForm,
   LotteryPlayers,
+  type LotteryPlayer,
 } from "../lottery-forms";
 
 export default function LotteryPage({ params }: PageProps<"/truppen/lotter/[id]">) {
@@ -35,31 +45,58 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
   if (!z.uuid().safeParse(id).success) notFound();
 
   const db = getDb();
-  const { lotteries, lotteryTickets, players } = schema;
-  const [[lottery], rows, liveQueries] = await Promise.all([
+  const { lotteries, lotteryKinds, lotteryTickets, players } = schema;
+  const [[lottery], kinds, tickets, liveQueries] = await Promise.all([
     db.select().from(lotteries).where(eq(lotteries.id, id)),
-    // Active players, and anyone else who still has tickets in this lottery.
     db
       .select({
-        id: players.id,
-        name: players.name,
-        handedOut: sql<number>`coalesce(${lotteryTickets.handedOut}, 0)::int`,
-        paid: sql<number>`coalesce(${lotteryTickets.paid}, 0)::int`,
-        returned: sql<number>`coalesce(${lotteryTickets.returned}, 0)::int`,
+        id: lotteryKinds.id,
+        name: lotteryKinds.name,
+        ticketPrice: lotteryKinds.ticketPrice,
+        ticketsPerPlayer: lotteryKinds.ticketsPerPlayer,
       })
-      .from(players)
-      .leftJoin(lotteryTickets, and(eq(lotteryTickets.playerId, players.id), eq(lotteryTickets.lotteryId, id)))
-      .where(or(eq(players.active, true), sql`${lotteryTickets.handedOut} > 0`))
-      .orderBy(asc(players.name)),
+      .from(lotteryKinds)
+      .where(eq(lotteryKinds.lotteryId, id))
+      .orderBy(asc(lotteryKinds.sortOrder)),
+    db
+      .select({
+        kindId: lotteryTickets.kindId,
+        playerId: lotteryTickets.playerId,
+        handedOut: lotteryTickets.handedOut,
+        paid: lotteryTickets.paid,
+        returned: lotteryTickets.returned,
+      })
+      .from(lotteryTickets)
+      .innerJoin(lotteryKinds, eq(lotteryKinds.id, lotteryTickets.kindId))
+      .where(eq(lotteryKinds.lotteryId, id)),
     sealLotteryLiveQueries(id),
   ]);
   if (!lottery) notFound();
   const liveUrl = realtimeUrl();
 
+  // Active players, and anyone else who still has tickets in this lottery.
+  const holders = [...new Set(tickets.filter((row) => row.handedOut > 0).map((row) => row.playerId))];
+  const playerRows = await db
+    .select({ id: players.id, name: players.name })
+    .from(players)
+    .where(holders.length > 0 ? or(eq(players.active, true), inArray(players.id, holders)) : eq(players.active, true))
+    .orderBy(asc(players.name));
+  const rows: LotteryPlayer[] = playerRows.map((player) => ({
+    ...player,
+    tickets: Object.fromEntries(
+      tickets
+        .filter((row) => row.playerId === player.id)
+        .map(({ kindId, handedOut, paid, returned }) => [kindId, { handedOut, paid, returned }]),
+    ),
+  }));
+
   const closed = lottery.closedAt !== null;
-  const totals = sumTickets(rows);
+  const all = tickets.map((row) => ({ [row.kindId]: row }));
+  const value = (pick: (counts: TicketCounts) => number) =>
+    all.reduce((sum, row) => sum + ticketValue(kinds, row, pick), 0);
+  const totals = sumTickets(tickets);
   const left = ticketsLeft(totals);
-  const playersWithout = rows.filter((row) => row.handedOut === 0).length;
+  const playersWithout = rows.filter((row) => playerTotals(kinds, row.tickets).handedOut === 0).length;
 
   return (
     <div className="space-y-6">
@@ -69,51 +106,64 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">{lottery.name}</h2>
         <p className="text-sm text-muted">
-          {formatKronor(lottery.ticketPrice)} per lott
+          {kinds.map((kind) => `${kind.name} ${formatKronor(kind.ticketPrice)}`).join(" · ")}
           {lottery.dueOn && <> · sista dag {formatDueOn(lottery.dueOn)}</>}
           {closed && " · avslutad"}
         </p>
       </div>
 
       <dl className="grid grid-cols-2 gap-2">
-        <Stat label="Betalt" value={formatKronor(totals.paid * lottery.ticketPrice)} accent />
+        <Stat label="Betalt" value={formatKronor(value((counts) => counts.paid))} accent />
         <Stat
           label="Kvar ute"
           value={`${left} ${ticketWord(left)}`}
-          detail={left > 0 ? `${formatKronor(left * lottery.ticketPrice)} om de säljs` : undefined}
-        />
-        <Stat label="Utdelade" value={`${totals.handedOut} ${ticketWord(totals.handedOut)}`} />
-        <Stat
-          label="Betalda · tillbaka"
-          value={`${totals.paid} · ${totals.returned}`}
+          detail={left > 0 ? `${formatKronor(value(ticketsLeft))} om de säljs` : undefined}
         />
       </dl>
 
-      {!closed && (
-        <HandOutToAllForm
-          lotteryId={lottery.id}
-          ticketsPerPlayer={lottery.ticketsPerPlayer}
-          playersWithout={playersWithout}
-        />
-      )}
+      <table className="w-full text-sm">
+        <thead className="text-left text-muted">
+          <tr>
+            <th className="py-1 font-normal">Sort</th>
+            <th className="py-1 text-right font-normal">Utdelade</th>
+            <th className="py-1 text-right font-normal">Betalda</th>
+            <th className="py-1 text-right font-normal">Tillbaka</th>
+            <th className="py-1 text-right font-normal">Kvar</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-black/10 dark:divide-white/10">
+          {kinds.map((kind) => {
+            const kindTotals = sumTickets(tickets.filter((row) => row.kindId === kind.id));
+            return (
+              <tr key={kind.id}>
+                <td className="py-2 pr-2">{kind.name}</td>
+                <td className="py-2 text-right tabular-nums">{kindTotals.handedOut}</td>
+                <td className="py-2 text-right tabular-nums">{kindTotals.paid}</td>
+                <td className="py-2 text-right tabular-nums">{kindTotals.returned}</td>
+                <td className="py-2 text-right font-semibold tabular-nums">{ticketsLeft(kindTotals)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {!closed && <HandOutToAllForm lotteryId={lottery.id} kinds={kinds} playersWithout={playersWithout} />}
 
       <div className="space-y-2">
         <h2 className="text-lg font-semibold">Spelare</h2>
         {!closed && <p className="text-sm text-muted">Tryck på en spelare för att dela ut lotter eller registrera vad som är betalt och tillbakalämnat.</p>}
-        <LotteryPlayers
-          lotteryId={lottery.id}
-          ticketPrice={lottery.ticketPrice}
-          ticketsPerPlayer={lottery.ticketsPerPlayer}
-          closed={closed}
-          players={rows}
-        />
+        <LotteryPlayers lotteryId={lottery.id} kinds={kinds} closed={closed} players={rows} />
       </div>
 
       {!closed && (
         <details className="rounded-xl border border-black/10 dark:border-white/10">
           <summary className="cursor-pointer list-none px-4 py-3 font-semibold">Ändra försäljningen</summary>
           <div className="border-t border-black/10 p-4 dark:border-white/10">
-            <LotteryForm lottery={lottery} />
+            <LotteryForm
+              // Starts over after a save, so new kinds get their ids.
+              key={kinds.map((kind) => kind.id).join()}
+              lottery={{ id: lottery.id, name: lottery.name, dueOn: lottery.dueOn, kinds }}
+            />
           </div>
         </details>
       )}

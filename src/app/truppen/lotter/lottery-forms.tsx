@@ -1,20 +1,26 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { Dialog } from "@/components/dialog";
 import {
   formatKronor,
+  handOutLabel,
+  noTickets,
+  playerTotals,
   ticketsLeft,
   ticketStatus,
+  ticketValue,
   ticketWord,
+  usualHandOut,
+  type KindCounts,
+  type LotteryKindInfo,
   type TicketCounts,
   type TicketStatus,
 } from "@/lib/lottery";
 import {
   createLottery,
   deleteLottery,
-  handOutToAll,
+  handOutUsual,
   saveTickets,
   setLotteryClosed,
   updateLottery,
@@ -38,62 +44,101 @@ function FormError({ state }: { state: LotteryState }) {
   );
 }
 
-type LotteryValues = {
-  id: string;
-  name: string;
-  ticketPrice: number;
-  ticketsPerPlayer: number | null;
-  dueOn: string | null;
-};
+type LotteryValues = { id: string; name: string; dueOn: string | null; kinds: LotteryKindInfo[] };
+
+/** A row of the kinds editor. `key` keeps an unsaved row's inputs while rows are removed. */
+type KindRow = { key: string; kind?: LotteryKindInfo };
+
+let nextRowKey = 0;
+const newRow = (): KindRow => ({ key: `new-${nextRowKey++}` });
 
 /** Creates a lottery, or changes one when it is given. */
 export function LotteryForm({ lottery }: { lottery?: LotteryValues }) {
   const [state, action, pending] = useActionState(lottery ? updateLottery : createLottery, {});
+  const [rows, setRows] = useState<KindRow[]>(() =>
+    lottery ? lottery.kinds.map((kind) => ({ key: kind.id, kind })) : [newRow()],
+  );
   return (
-    <form action={action} className="space-y-3">
+    <form action={action} className="space-y-4">
       {lottery && <input type="hidden" name="lotteryId" value={lottery.id} />}
       <label className="block space-y-1">
-        <span className="text-sm font-medium">Namn</span>
+        <span className="text-sm font-medium">Namn på försäljningen</span>
         <input
           name="name"
           required
           maxLength={80}
           defaultValue={lottery?.name}
-          placeholder="Till exempel Bingolotter jul 2026"
+          placeholder="Till exempel Julförsäljning 2026"
           className={fieldClass}
         />
       </label>
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Pris per lott, kr</span>
-          <input
-            name="ticketPrice"
-            type="number"
-            inputMode="numeric"
-            required
-            min={0}
-            max={10000}
-            defaultValue={lottery?.ticketPrice}
-            className={fieldClass}
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Lotter per spelare</span>
-          <input
-            name="ticketsPerPlayer"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={1000}
-            defaultValue={lottery?.ticketsPerPlayer ?? undefined}
-            className={fieldClass}
-          />
-        </label>
-      </div>
       <label className="block space-y-1">
         <span className="text-sm font-medium">Sista dag att redovisa</span>
         <input name="dueOn" type="date" defaultValue={lottery?.dueOn ?? undefined} className={fieldClass} />
       </label>
+
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium">Sorters lotter</legend>
+        {rows.map((row, i) => (
+          <div key={row.key} className="space-y-2 rounded-lg border border-black/10 p-3 dark:border-white/10">
+            <input type="hidden" name="kindId" value={row.kind?.id ?? ""} />
+            <div className="flex items-center gap-2">
+              <input
+                name="kindName"
+                required
+                maxLength={60}
+                defaultValue={row.kind?.name}
+                placeholder={i === 0 ? "Till exempel Bingolotter" : "Till exempel Skraplotter"}
+                aria-label="Sort"
+                className={fieldClass}
+              />
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setRows(rows.filter((other) => other.key !== row.key))}
+                  aria-label="Ta bort sorten"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-lg text-xl text-muted"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block space-y-1">
+                <span className="text-xs text-muted">Pris per lott, kr</span>
+                <input
+                  name="kindPrice"
+                  type="number"
+                  inputMode="numeric"
+                  required
+                  min={0}
+                  max={10000}
+                  defaultValue={row.kind?.ticketPrice}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-muted">Antal per spelare</span>
+                <input
+                  name="kindPerPlayer"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={1000}
+                  defaultValue={row.kind?.ticketsPerPlayer ?? undefined}
+                  className={fieldClass}
+                />
+              </label>
+            </div>
+          </div>
+        ))}
+        {rows.length < 10 && (
+          <button type="button" onClick={() => setRows([...rows, newRow()])} className={secondaryButtonClass}>
+            + Lägg till en sort
+          </button>
+        )}
+      </fieldset>
+
       <div className="flex items-center gap-3">
         <button type="submit" disabled={pending} className={buttonClass}>
           {pending ? "Sparar…" : lottery ? "Spara" : "Skapa"}
@@ -105,45 +150,38 @@ export function LotteryForm({ lottery }: { lottery?: LotteryValues }) {
   );
 }
 
+function kindsSentence(kinds: LotteryKindInfo[]) {
+  return usualHandOut(kinds)
+    .map((kind) => `${kind.ticketsPerPlayer} ${kind.name}`)
+    .join(" och ");
+}
+
 export function HandOutToAllForm({
   lotteryId,
-  ticketsPerPlayer,
+  kinds,
   playersWithout,
 }: {
   lotteryId: string;
-  ticketsPerPlayer: number | null;
+  kinds: LotteryKindInfo[];
   playersWithout: number;
 }) {
-  const [state, action, pending] = useActionState(handOutToAll, {});
-  if (playersWithout === 0) return null;
+  const [state, action, pending] = useActionState(handOutUsual, {});
+  if (playersWithout === 0 || usualHandOut(kinds).length === 0) return null;
   return (
     <form action={action} className="space-y-2 rounded-xl border border-black/10 p-4 dark:border-white/10">
       <input type="hidden" name="lotteryId" value={lotteryId} />
       <p className="text-sm">
-        {playersWithout} spelare har inte fått några lotter än.
+        {playersWithout} spelare har inte fått några lotter än. Ge var och en {kindsSentence(kinds)}.
       </p>
-      <div className="flex items-center gap-2">
-        <input
-          name="tickets"
-          type="number"
-          inputMode="numeric"
-          required
-          min={1}
-          max={1000}
-          defaultValue={ticketsPerPlayer ?? undefined}
-          aria-label="Lotter per spelare"
-          className="w-20 rounded-lg border border-black/10 bg-transparent px-2 py-2 text-center dark:border-white/10"
-        />
-        <button type="submit" disabled={pending} className={buttonClass}>
-          {pending ? "Delar ut…" : "Dela ut till alla dem"}
-        </button>
-      </div>
+      <button type="submit" disabled={pending} className={buttonClass}>
+        {pending ? "Delar ut…" : "Dela ut till alla dem"}
+      </button>
       <FormError state={state} />
     </form>
   );
 }
 
-export type LotteryPlayer = TicketCounts & { id: string; name: string };
+export type LotteryPlayer = { id: string; name: string; tickets: KindCounts };
 
 type Filter = "all" | TicketStatus;
 
@@ -160,34 +198,41 @@ const statusClass: Record<TicketStatus, string> = {
   done: "bg-green-600/15 text-green-700 dark:text-green-400",
 };
 
-function statusLabel(player: TicketCounts) {
-  const status = ticketStatus(player);
+function statusLabel(totals: TicketCounts) {
+  const status = ticketStatus(totals);
   if (status === "none") return "Inga lotter";
   if (status === "done") return "Klar";
-  return `${ticketsLeft(player)} kvar`;
+  return `${ticketsLeft(totals)} kvar`;
+}
+
+/** What a player has been handed, such as "10 Bingolotter · 15 Skraplotter · 8 betalda". */
+function ticketsSummary(kinds: LotteryKindInfo[], tickets: KindCounts, totals: TicketCounts) {
+  const handed = kinds
+    .filter((kind) => (tickets[kind.id]?.handedOut ?? 0) > 0)
+    .map((kind) => (kinds.length === 1 ? `${tickets[kind.id].handedOut} ${ticketWord(tickets[kind.id].handedOut)}` : `${tickets[kind.id].handedOut} ${kind.name}`));
+  return [...handed, `${totals.paid} betalda`, ...(totals.returned > 0 ? [`${totals.returned} tillbaka`] : [])].join(" · ");
 }
 
 /** Every player with their tickets. Tapping one opens a dialog to change the numbers. */
 export function LotteryPlayers({
   lotteryId,
-  ticketPrice,
-  ticketsPerPlayer,
+  kinds,
   closed,
   players,
 }: {
   lotteryId: string;
-  ticketPrice: number;
-  ticketsPerPlayer: number | null;
+  kinds: LotteryKindInfo[];
   closed: boolean;
   players: LotteryPlayer[];
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openCount, setOpenCount] = useState(0);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const selected = players.find((player) => player.id === selectedId);
-  const quickHandOut = (player: LotteryPlayer) =>
-    !closed && ticketsPerPlayer !== null && ticketStatus(player) === "none";
-  const shown = filter === "all" ? players : players.filter((player) => ticketStatus(player) === filter);
+  const withTotals = players.map((player) => ({ ...player, totals: playerTotals(kinds, player.tickets) }));
+  const selected = withTotals.find((player) => player.id === selectedId);
+  const canHandOut = !closed && usualHandOut(kinds).length > 0;
+  const shown = filter === "all" ? withTotals : withTotals.filter((player) => ticketStatus(player.totals) === filter);
 
   return (
     <div className="space-y-3">
@@ -196,8 +241,8 @@ export function LotteryPlayers({
           const active = filter === option.value;
           const count =
             option.value === "all"
-              ? players.length
-              : players.filter((player) => ticketStatus(player) === option.value).length;
+              ? withTotals.length
+              : withTotals.filter((player) => ticketStatus(player.totals) === option.value).length;
           return (
             <button
               key={option.value}
@@ -218,50 +263,49 @@ export function LotteryPlayers({
         <p className="text-sm text-muted">Ingen spelare här.</p>
       ) : (
         <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
-          {shown.map((player) => (
-            <li key={player.id} className="flex items-center">
-              <button
-                type="button"
-                disabled={closed}
-                onClick={() => {
-                  setSelectedId(player.id);
-                  dialogRef.current?.showModal();
-                }}
-                className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate">{player.name}</span>
-                  {player.handedOut > 0 && (
-                    <span className="block text-sm text-muted">
-                      {player.handedOut} {ticketWord(player.handedOut)} · {player.paid} betalda
-                      {player.returned > 0 && ` · ${player.returned} tillbaka`}
+          {shown.map((player) => {
+            const status = ticketStatus(player.totals);
+            const quickHandOut = canHandOut && status === "none";
+            return (
+              <li key={player.id} className="flex items-center">
+                <button
+                  type="button"
+                  disabled={closed}
+                  onClick={() => {
+                    setSelectedId(player.id);
+                    setOpenCount(openCount + 1);
+                    dialogRef.current?.showModal();
+                  }}
+                  className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate">{player.name}</span>
+                    {status !== "none" && (
+                      <span className="block text-sm text-muted">
+                        {ticketsSummary(kinds, player.tickets, player.totals)}
+                      </span>
+                    )}
+                  </span>
+                  {!quickHandOut && (
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass[status]}`}>
+                      {statusLabel(player.totals)}
                     </span>
                   )}
-                </span>
-                {!quickHandOut(player) && (
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass[ticketStatus(player)]}`}
-                  >
-                    {statusLabel(player)}
-                  </span>
-                )}
-              </button>
-              {quickHandOut(player) && ticketsPerPlayer && (
-                <QuickHandOut lotteryId={lotteryId} playerId={player.id} tickets={ticketsPerPlayer} />
-              )}
-            </li>
-          ))}
+                </button>
+                {quickHandOut && <QuickHandOut lotteryId={lotteryId} playerId={player.id} kinds={kinds} />}
+              </li>
+            );
+          })}
         </ul>
       )}
 
       <Dialog dialogRef={dialogRef} title={selected?.name ?? "Lotter"}>
         {selected && (
           <TicketsForm
-            // A new key per player and per saved state, so the fields start from the latest numbers.
-            key={`${selected.id}:${selected.handedOut}:${selected.paid}:${selected.returned}`}
+            // Starts from the latest numbers each time it opens, and keeps what the coach types after that.
+            key={openCount}
             lotteryId={lotteryId}
-            ticketPrice={ticketPrice}
-            ticketsPerPlayer={ticketsPerPlayer}
+            kinds={kinds}
             player={selected}
             onDone={() => dialogRef.current?.close()}
           />
@@ -271,21 +315,15 @@ export function LotteryPlayers({
   );
 }
 
-/** Hands the lottery's usual number of tickets to a player who has none, in one tap. */
-function QuickHandOut({ lotteryId, playerId, tickets }: { lotteryId: string; playerId: string; tickets: number }) {
-  const [state, action, pending] = useActionState(saveTickets, {});
+/** Hands a player who has no tickets the usual number of every kind, in one tap. */
+function QuickHandOut({ lotteryId, playerId, kinds }: { lotteryId: string; playerId: string; kinds: LotteryKindInfo[] }) {
+  const [state, action, pending] = useActionState(handOutUsual, {});
   return (
     <form action={action} className="shrink-0 pr-3 text-right">
       <input type="hidden" name="lotteryId" value={lotteryId} />
       <input type="hidden" name="playerId" value={playerId} />
-      <input type="hidden" name="handedOut" value={tickets} />
-      <input type="hidden" name="paid" value={0} />
-      <input type="hidden" name="returned" value={0} />
-      <input type="hidden" name="previousHandedOut" value={0} />
-      <input type="hidden" name="previousPaid" value={0} />
-      <input type="hidden" name="previousReturned" value={0} />
       <button type="submit" disabled={pending} className={`${buttonClass} px-3 py-1.5`}>
-        {pending ? "Delar ut…" : `Dela ut ${tickets}`}
+        {pending ? "Delar ut…" : handOutLabel(kinds)}
       </button>
       {state.error && (
         <span role="alert" className="block max-w-40 text-xs text-red-600 dark:text-red-400">
@@ -311,7 +349,7 @@ function Stepper({
     "flex size-10 items-center justify-center rounded-lg border border-black/10 text-lg font-semibold dark:border-white/10";
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-sm font-medium">{label}</span>
+      <span className="text-sm">{label}</span>
       <span className="flex items-center gap-1">
         <button type="button" aria-label={`${label}, en mindre`} onClick={() => onChange(Math.max(0, value - 1))} className={stepClass}>
           −
@@ -337,89 +375,110 @@ function Stepper({
 
 function TicketsForm({
   lotteryId,
-  ticketPrice,
-  ticketsPerPlayer,
+  kinds,
   player,
   onDone,
 }: {
   lotteryId: string;
-  ticketPrice: number;
-  ticketsPerPlayer: number | null;
+  kinds: LotteryKindInfo[];
   player: LotteryPlayer;
   onDone: () => void;
 }) {
-  const [handedOut, setHandedOut] = useState(player.handedOut);
-  const [paid, setPaid] = useState(player.paid);
-  const [returned, setReturned] = useState(player.returned);
+  // What the coach saw on opening. A change another coach saves meanwhile then fails the save, not overwrites.
+  const [seenTickets] = useState<KindCounts>(() =>
+    Object.fromEntries(kinds.map((kind) => [kind.id, player.tickets[kind.id] ?? noTickets])),
+  );
+  const [tickets, setTickets] = useState(seenTickets);
   const [state, action, pending] = useActionState(async (previous: LotteryState, formData: FormData) => {
     const result = await saveTickets(previous, formData);
     if (result.saved) onDone();
     return result;
   }, {});
-  const left = handedOut - paid - returned;
-  const formRef = useRef<HTMLFormElement>(null);
+  const [handOutState, handOutAction, handingOut] = useActionState(async (previous: LotteryState, formData: FormData) => {
+    const result = await handOutUsual(previous, formData);
+    if (result.saved) onDone();
+    return result;
+  }, {});
+  const set = (kindId: string, key: keyof TicketCounts, value: number) =>
+    setTickets({ ...tickets, [kindId]: { ...tickets[kindId], [key]: value } });
+
+  const totals = playerTotals(kinds, tickets);
+  const left = ticketsLeft(totals);
+  const overdrawn = kinds.some((kind) => ticketsLeft(tickets[kind.id]) < 0);
+  const showHandOut = ticketStatus(playerTotals(kinds, seenTickets)) === "none" && usualHandOut(kinds).length > 0;
 
   return (
-    <form ref={formRef} action={action} className="space-y-4">
-      <input type="hidden" name="lotteryId" value={lotteryId} />
-      <input type="hidden" name="playerId" value={player.id} />
-      <input type="hidden" name="previousHandedOut" value={player.handedOut} />
-      <input type="hidden" name="previousPaid" value={player.paid} />
-      <input type="hidden" name="previousReturned" value={player.returned} />
-
-      <div className="space-y-2">
-        <Stepper name="handedOut" label="Utdelade" value={handedOut} onChange={setHandedOut} />
-        <Stepper name="paid" label="Betalda" value={paid} onChange={setPaid} />
-        <Stepper name="returned" label="Tillbaka" value={returned} onChange={setReturned} />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {handedOut === 0 && ticketsPerPlayer && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => {
-              // Saves right away, as handing out the usual number is the common case.
-              flushSync(() => setHandedOut(ticketsPerPlayer));
-              formRef.current?.requestSubmit();
-            }}
-            className={buttonClass}
-          >
-            Dela ut {ticketsPerPlayer} och spara
+    <div className="space-y-4">
+      {showHandOut && (
+        <form action={handOutAction} className="space-y-2">
+          <input type="hidden" name="lotteryId" value={lotteryId} />
+          <input type="hidden" name="playerId" value={player.id} />
+          <button type="submit" disabled={handingOut || pending} className={`${buttonClass} w-full`}>
+            {handingOut ? "Delar ut…" : `Dela ut ${kindsSentence(kinds)}`}
           </button>
-        )}
-        {left > 0 && (
-          <button type="button" onClick={() => setPaid(paid + left)} className={secondaryButtonClass}>
-            Resten betalda
-          </button>
-        )}
-        {left > 0 && paid > 0 && (
-          <button type="button" onClick={() => setReturned(returned + left)} className={secondaryButtonClass}>
-            Resten tillbaka
-          </button>
-        )}
-      </div>
+          <FormError state={handOutState} />
+        </form>
+      )}
 
-      <p className={`text-sm ${left < 0 ? "text-red-600 dark:text-red-400" : "text-muted"}`}>
-        {left < 0
-          ? "Betalda och tillbaka är fler än de utdelade."
-          : left > 0
-            ? `${left} ${ticketWord(left)} kvar att redovisa, ${formatKronor(left * ticketPrice)} om de säljs.`
-            : handedOut > 0
-              ? `Klar. ${formatKronor(paid * ticketPrice)} betalt.`
-              : "Inga lotter utdelade."}
-      </p>
+      <form action={action} className="space-y-4">
+        <input type="hidden" name="lotteryId" value={lotteryId} />
+        <input type="hidden" name="playerId" value={player.id} />
 
-      <FormError state={state} />
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={onDone} className={secondaryButtonClass}>
-          Avbryt
-        </button>
-        <button type="submit" disabled={pending || left < 0} className={buttonClass}>
-          {pending ? "Sparar…" : "Spara"}
-        </button>
-      </div>
-    </form>
+        {kinds.map((kind) => {
+          const counts = tickets[kind.id];
+          const seen = seenTickets[kind.id] ?? noTickets;
+          const kindLeft = ticketsLeft(counts);
+          return (
+            <fieldset key={kind.id} className="space-y-2">
+              <input type="hidden" name="kindId" value={kind.id} />
+              <input type="hidden" name={`previous.handedOut.${kind.id}`} value={seen.handedOut} />
+              <input type="hidden" name={`previous.paid.${kind.id}`} value={seen.paid} />
+              <input type="hidden" name={`previous.returned.${kind.id}`} value={seen.returned} />
+              {kinds.length > 1 && (
+                <legend className="pb-1 text-sm font-semibold">
+                  {kind.name} <span className="font-normal text-muted">· {formatKronor(kind.ticketPrice)}</span>
+                </legend>
+              )}
+              <Stepper name={`handedOut.${kind.id}`} label="Utdelade" value={counts.handedOut} onChange={(value) => set(kind.id, "handedOut", value)} />
+              <Stepper name={`paid.${kind.id}`} label="Betalda" value={counts.paid} onChange={(value) => set(kind.id, "paid", value)} />
+              <Stepper name={`returned.${kind.id}`} label="Tillbaka" value={counts.returned} onChange={(value) => set(kind.id, "returned", value)} />
+              {kindLeft > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => set(kind.id, "paid", counts.paid + kindLeft)} className={secondaryButtonClass}>
+                    Resten betalda
+                  </button>
+                  {counts.paid > 0 && (
+                    <button type="button" onClick={() => set(kind.id, "returned", counts.returned + kindLeft)} className={secondaryButtonClass}>
+                      Resten tillbaka
+                    </button>
+                  )}
+                </div>
+              )}
+            </fieldset>
+          );
+        })}
+
+        <p className={`text-sm ${overdrawn ? "text-red-600 dark:text-red-400" : "text-muted"}`}>
+          {overdrawn
+            ? "Betalda och tillbaka är fler än de utdelade."
+            : left > 0
+              ? `${left} ${ticketWord(left)} kvar att redovisa, ${formatKronor(ticketValue(kinds, tickets, ticketsLeft))} om de säljs.`
+              : totals.handedOut > 0
+                ? `Klar. ${formatKronor(ticketValue(kinds, tickets, (counts) => counts.paid))} betalt.`
+                : "Inga lotter utdelade."}
+        </p>
+
+        <FormError state={state} />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onDone} className={secondaryButtonClass}>
+            Avbryt
+          </button>
+          <button type="submit" disabled={pending || handingOut || overdrawn} className={buttonClass}>
+            {pending ? "Sparar…" : "Spara"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 

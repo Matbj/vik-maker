@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
-import { desc, eq, sql } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { sql } from "drizzle-orm";
+import { getDb } from "@/db";
 import { env } from "@/lib/env";
 import { Notice } from "@/components/notice";
 import { formatDueOn, formatKronor, ticketWord } from "@/lib/lottery";
@@ -28,25 +28,30 @@ async function Lotteries() {
     return <Notice title="Databasen är inte konfigurerad">Lägg till <code>DATABASE_URL</code> i <code>.env.local</code>.</Notice>;
   }
 
-  const { lotteries, lotteryTickets } = schema;
-  const rows = await getDb()
-    .select({
-      id: lotteries.id,
-      name: lotteries.name,
-      ticketPrice: lotteries.ticketPrice,
-      dueOn: lotteries.dueOn,
-      closedAt: lotteries.closedAt,
-      handedOut: sql<number>`coalesce(sum(${lotteryTickets.handedOut}), 0)::int`,
-      paid: sql<number>`coalesce(sum(${lotteryTickets.paid}), 0)::int`,
-      playersWithTicketsLeft: sql<number>`count(*) filter (where ${lotteryTickets.handedOut} > ${lotteryTickets.paid} + ${lotteryTickets.returned})::int`,
-    })
-    .from(lotteries)
-    .leftJoin(lotteryTickets, eq(lotteryTickets.lotteryId, lotteries.id))
-    .groupBy(lotteries.id)
-    .orderBy(desc(lotteries.createdAt));
+  const { rows } = await getDb().execute<{
+    id: string;
+    name: string;
+    dueOn: string | null;
+    closed: boolean;
+    handedOut: number;
+    paid: number;
+    paidKronor: number;
+    playersWithTicketsLeft: number;
+  }>(sql`
+    select l.id, l.name, l.due_on::text as "dueOn", l.closed_at is not null as closed,
+      coalesce(sum(t.handed_out), 0)::int as "handedOut",
+      coalesce(sum(t.paid), 0)::int as paid,
+      coalesce(sum(t.paid * k.ticket_price), 0)::int as "paidKronor",
+      count(distinct t.player_id) filter (where t.handed_out > t.paid + t.returned)::int as "playersWithTicketsLeft"
+    from lotteries l
+    left join lottery_kinds k on k.lottery_id = l.id
+    left join lottery_tickets t on t.kind_id = k.id
+    group by l.id
+    order by l.created_at desc
+  `);
 
-  const open = rows.filter((row) => !row.closedAt);
-  const closed = rows.filter((row) => row.closedAt);
+  const open = rows.filter((row) => !row.closed);
+  const closed = rows.filter((row) => row.closed);
 
   return (
     <div className="space-y-6">
@@ -80,11 +85,11 @@ function LotteryList({
   lotteries: {
     id: string;
     name: string;
-    ticketPrice: number;
     dueOn: string | null;
-    closedAt: Date | null;
+    closed: boolean;
     handedOut: number;
     paid: number;
+    paidKronor: number;
     playersWithTicketsLeft: number;
   }[];
 }) {
@@ -101,19 +106,19 @@ function LotteryList({
               <span className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 truncate font-medium">{lottery.name}</span>
                 <span className="shrink-0 text-sm font-semibold text-accent">
-                  {formatKronor(lottery.paid * lottery.ticketPrice)}
+                  {formatKronor(lottery.paidKronor)}
                 </span>
               </span>
               <span className="mt-0.5 block text-sm text-muted">
                 {lottery.paid} av {lottery.handedOut} {ticketWord(lottery.handedOut)} betalda
-                {!lottery.closedAt && lottery.playersWithTicketsLeft > 0 && (
+                {!lottery.closed && lottery.playersWithTicketsLeft > 0 && (
                   <>
                     {" · "}
                     {lottery.playersWithTicketsLeft}{" "}
                     spelare har lotter kvar
                   </>
                 )}
-                {!lottery.closedAt && lottery.dueOn && <> · sista dag {formatDueOn(lottery.dueOn)}</>}
+                {!lottery.closed && lottery.dueOn && <> · sista dag {formatDueOn(lottery.dueOn)}</>}
               </span>
             </Link>
           </li>

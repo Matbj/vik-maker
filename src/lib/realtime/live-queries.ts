@@ -23,7 +23,9 @@ const WORKOUT_QUERIES = {
 
 const LOTTERY_QUERIES = {
   lottery: "SELECT id, updated_at, closed_at FROM lotteries WHERE id = $1::uuid",
-  tickets: "SELECT player_id, handed_out, paid, returned FROM lottery_tickets WHERE lottery_id = $1::uuid",
+  kinds: "SELECT id, updated_at FROM lottery_kinds WHERE lottery_id = $1::uuid",
+  tickets:
+    "SELECT t.kind_id, t.player_id, t.handed_out, t.paid, t.returned FROM lottery_tickets t JOIN lottery_kinds k ON k.id = t.kind_id WHERE k.lottery_id = $1::uuid",
 } as const;
 
 export type LiveQueries = Record<string, SealedLiveQuery<unknown>>;

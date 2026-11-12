@@ -22,7 +22,7 @@ export function Dialog({
       onClick={(event) => {
         if (event.target === dialogRef.current) dialogRef.current?.close();
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-xl bg-background text-foreground shadow-xl backdrop:bg-black/50"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-sm overflow-y-auto rounded-xl bg-background text-foreground shadow-xl backdrop:bg-black/50"
     >
       <div className="space-y-4 p-4">
         <div className="space-y-1">

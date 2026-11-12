@@ -1,5 +1,5 @@
 {
-  "id": "4a7fa5ba-4153-4cad-a48f-072d34a78d77",
+  "id": "2e4d3fe1-3a6a-4381-bf1f-c70012fcf951",
   "prevId": "9f7ed4b3-96b3-450e-88a6-6f302c00415f",
   "version": "7",
   "dialect": "postgresql",
@@ -347,18 +347,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "ticket_price": {
-          "name": "ticket_price",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tickets_per_player": {
-          "name": "tickets_per_player",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "due_on": {
           "name": "due_on",
           "type": "date",
@@ -391,10 +379,105 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.lottery_kinds": {
+      "name": "lottery_kinds",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "lottery_id": {
+          "name": "lottery_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket_price": {
+          "name": "ticket_price",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tickets_per_player": {
+          "name": "tickets_per_player",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "lottery_kinds_lottery_id_idx": {
+          "name": "lottery_kinds_lottery_id_idx",
+          "columns": [
+            {
+              "expression": "lottery_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "lottery_kinds_lottery_id_lotteries_id_fk": {
+          "name": "lottery_kinds_lottery_id_lotteries_id_fk",
+          "tableFrom": "lottery_kinds",
+          "tableTo": "lotteries",
+          "columnsFrom": [
+            "lottery_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
       "checkConstraints": {
-        "lotteries_ticket_price_check": {
-          "name": "lotteries_ticket_price_check",
-          "value": "\"lotteries\".\"ticket_price\" >= 0"
+        "lottery_kinds_ticket_price_check": {
+          "name": "lottery_kinds_ticket_price_check",
+          "value": "\"lottery_kinds\".\"ticket_price\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -403,8 +486,8 @@
       "name": "lottery_tickets",
       "schema": "",
       "columns": {
-        "lottery_id": {
-          "name": "lottery_id",
+        "kind_id": {
+          "name": "kind_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -453,12 +536,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "lottery_tickets_lottery_id_lotteries_id_fk": {
-          "name": "lottery_tickets_lottery_id_lotteries_id_fk",
+        "lottery_tickets_kind_id_lottery_kinds_id_fk": {
+          "name": "lottery_tickets_kind_id_lottery_kinds_id_fk",
           "tableFrom": "lottery_tickets",
-          "tableTo": "lotteries",
+          "tableTo": "lottery_kinds",
           "columnsFrom": [
-            "lottery_id"
+            "kind_id"
           ],
           "columnsTo": [
             "id"
@@ -481,10 +564,10 @@
         }
       },
       "compositePrimaryKeys": {
-        "lottery_tickets_lottery_id_player_id_pk": {
-          "name": "lottery_tickets_lottery_id_player_id_pk",
+        "lottery_tickets_kind_id_player_id_pk": {
+          "name": "lottery_tickets_kind_id_player_id_pk",
           "columns": [
-            "lottery_id",
+            "kind_id",
             "player_id"
           ]
         }
