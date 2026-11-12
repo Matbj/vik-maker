@@ -120,6 +120,13 @@
       "when": 1794512565918,
       "tag": "0016_lottery_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1794516408357,
+      "tag": "0017_drop_lottery_tickets_paid",
+      "breakpoints": true
     }
   ]
 }
