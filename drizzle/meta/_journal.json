@@ -113,6 +113,13 @@
       "when": 1794483877187,
       "tag": "0015_lottery_players",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1794512565918,
+      "tag": "0016_lottery_payments",
+      "breakpoints": true
     }
   ]
 }

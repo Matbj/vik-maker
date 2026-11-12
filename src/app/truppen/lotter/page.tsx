@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { env } from "@/lib/env";
 import { Notice } from "@/components/notice";
-import { formatDueOn, formatKronor, ticketWord } from "@/lib/lottery";
+import { formatDueOn, formatKronor } from "@/lib/lottery";
 import { LotteryForm } from "./lottery-forms";
 
 export default function LotteriesPage() {
@@ -33,19 +33,34 @@ async function Lotteries() {
     name: string;
     dueOn: string | null;
     closed: boolean;
-    handedOut: number;
-    paid: number;
-    paidKronor: number;
-    playersWithTicketsLeft: number;
+    collected: number;
+    owed: number;
+    playersOwing: number;
   }>(sql`
+    with worth as (
+      select k.lottery_id, t.player_id, sum((t.handed_out - t.returned) * k.ticket_price) as amount
+      from lottery_tickets t
+      join lottery_kinds k on k.id = t.kind_id
+      group by k.lottery_id, t.player_id
+    ),
+    paid as (
+      select lottery_id, player_id, sum(amount) as amount
+      from lottery_payments
+      group by lottery_id, player_id
+    ),
+    balance as (
+      select coalesce(w.lottery_id, p.lottery_id) as lottery_id,
+        coalesce(w.amount, 0) - coalesce(p.amount, 0) as owed,
+        coalesce(p.amount, 0) as paid
+      from worth w
+      full join paid p on p.lottery_id = w.lottery_id and p.player_id = w.player_id
+    )
     select l.id, l.name, l.due_on::text as "dueOn", l.closed_at is not null as closed,
-      coalesce(sum(t.handed_out), 0)::int as "handedOut",
-      coalesce(sum(t.paid), 0)::int as paid,
-      coalesce(sum(t.paid * k.ticket_price), 0)::int as "paidKronor",
-      count(distinct t.player_id) filter (where t.handed_out > t.paid + t.returned)::int as "playersWithTicketsLeft"
+      coalesce(sum(b.paid), 0)::int as collected,
+      coalesce(sum(greatest(b.owed, 0)), 0)::int as owed,
+      count(*) filter (where b.owed > 0)::int as "playersOwing"
     from lotteries l
-    left join lottery_kinds k on k.lottery_id = l.id
-    left join lottery_tickets t on t.kind_id = k.id
+    left join balance b on b.lottery_id = l.id
     group by l.id
     order by l.created_at desc
   `);
@@ -87,10 +102,9 @@ function LotteryList({
     name: string;
     dueOn: string | null;
     closed: boolean;
-    handedOut: number;
-    paid: number;
-    paidKronor: number;
-    playersWithTicketsLeft: number;
+    collected: number;
+    owed: number;
+    playersOwing: number;
   }[];
 }) {
   return (
@@ -106,16 +120,15 @@ function LotteryList({
               <span className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 truncate font-medium">{lottery.name}</span>
                 <span className="shrink-0 text-sm font-semibold text-accent">
-                  {formatKronor(lottery.paidKronor)}
+                  {formatKronor(lottery.collected)}
                 </span>
               </span>
               <span className="mt-0.5 block text-sm text-muted">
-                {lottery.paid} av {lottery.handedOut} {ticketWord(lottery.handedOut)} betalda
-                {!lottery.closed && lottery.playersWithTicketsLeft > 0 && (
+                Insamlat
+                {lottery.owed > 0 && (
                   <>
                     {" · "}
-                    {lottery.playersWithTicketsLeft}{" "}
-                    spelare har lotter kvar
+                    {formatKronor(lottery.owed)} kvar hos {lottery.playersOwing} spelare
                   </>
                 )}
                 {!lottery.closed && lottery.dueOn && <> · sista dag {formatDueOn(lottery.dueOn)}</>}
