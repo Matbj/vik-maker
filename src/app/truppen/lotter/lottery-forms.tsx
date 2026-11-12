@@ -160,10 +160,12 @@ function kindsSentence(kinds: LotteryKindInfo[]) {
 /** `handedOutAt` is when the player was first handed tickets in the sale. */
 export type LotteryPlayer = { id: string; name: string; tickets: KindCounts; handedOutAt: Date | null };
 
-type Filter = "all" | Exclude<TicketStatus, "none">;
+type Filter = "all" | TicketStatus;
 
+// In the order a player goes through them.
 const filters: { value: Filter; label: string }[] = [
   { value: "all", label: "Alla" },
+  { value: "none", label: "Ej utdelade" },
   { value: "out", label: "Säljer" },
   { value: "done", label: "Redovisade" },
 ];
