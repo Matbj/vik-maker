@@ -519,14 +519,34 @@ function TicketsForm({
 }
 
 export function CloseLotteryButton({ lotteryId, closed }: { lotteryId: string; closed: boolean }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const label = closed ? "Öppna igen" : "Avsluta försäljningen";
   return (
-    <form action={setLotteryClosed}>
-      <input type="hidden" name="lotteryId" value={lotteryId} />
-      <input type="hidden" name="closed" value={closed ? "false" : "true"} />
-      <button type="submit" className={secondaryButtonClass}>
-        {closed ? "Öppna igen" : "Avsluta försäljningen"}
+    <>
+      <button type="button" onClick={() => dialogRef.current?.showModal()} className={secondaryButtonClass}>
+        {label}
       </button>
-    </form>
+      <Dialog
+        dialogRef={dialogRef}
+        title={closed ? "Öppna försäljningen igen?" : "Avsluta försäljningen?"}
+        text={
+          closed
+            ? "Då går det att dela ut lotter och ändra siffrorna igen."
+            : "Då går det inte längre att dela ut lotter eller ändra siffrorna, förrän någon öppnar den igen."
+        }
+      >
+        <form action={setLotteryClosed} onSubmit={() => dialogRef.current?.close()} className="flex justify-end gap-2">
+          <input type="hidden" name="lotteryId" value={lotteryId} />
+          <input type="hidden" name="closed" value={closed ? "false" : "true"} />
+          <button type="button" onClick={() => dialogRef.current?.close()} className={secondaryButtonClass}>
+            Avbryt
+          </button>
+          <button type="submit" className={buttonClass}>
+            {label}
+          </button>
+        </form>
+      </Dialog>
+    </>
   );
 }
 
