@@ -56,7 +56,7 @@ const SINGLE_LEAGUE_PROMPT = `All teams play in one league, so set "league" to n
 
 const LEAGUES_PROMPT = `Split the teams into leagueCount leagues by strength: league 1 gets the strongest players, league 2 the next, and league 3, if there is one, the weakest. Order the players by home level: nobody may play in a weaker league than a player with a weaker home level, so a B1 player never goes in league 3 while a C player is in league 2. Players of the same level can be split across neighbouring leagues to make the numbers work. "teamsPerLeague" gives how many teams each league has, league 1 first. Set "league" to the league's number on every team. Teams within a league play each other, so give them exactly the same number of players, such as 4 v 4 rather than 5 v 4, and keep them even in strength. When the players don't divide evenly, move a player or two between neighbouring leagues so that whole leagues get the bigger teams, and leave at most one league with uneven teams. A C player shouldn't share a league with A players. Within each league, spread the players of each level evenly over its teams.`;
 
-const KEEP_GROUPS_PROMPT = `"currentGroups" lists the leveled groups the coaches have already made for this workout, strongest first. The coaches want the teams to stay as close to those groups as possible, so move as few players away from their groupmates as you can. With as many teams as groups, make each team one group. With more teams than groups, split each group into teams and keep those teams even with each other. With fewer teams than groups, combine neighbouring groups. With several leagues, the stronger groups go in the lower-numbered leagues. Only move a player when the rules on team count, team sizes and leagues require it, or to honour "keepApart". Staying close to the groups comes before evening out strength between teams from different groups, before ordering the leagues by home level, and before "recentTeams". Players who aren't in any group can go on any team.`;
+const KEEP_GROUPS_PROMPT = `"currentGroups" lists the leveled groups the coaches have already made for this workout, strongest first. The coaches want the leagues to stay as close to those groups as possible: keep each group's players in the same league, with the stronger groups in the lower-numbered leagues. With as many leagues as groups, make each league one group. With fewer leagues than groups, combine neighbouring groups in a league. Only move a player to another league when the rules on team count, team sizes and leagues require it, or to honour "keepApart". Staying close to the groups comes before ordering the leagues by home level and before "recentTeams". Teams within a league still play each other, so spread each group's players and each home level evenly over the league's teams rather than making a team of one group. Players who aren't in any group can go in any league.`;
 
 const SYSTEM_PROMPT = `You split the youth football players at one training session into leveled groups for their coaches. Each player has a home level set by the coaches. Levels are listed strongest first.
 
@@ -175,7 +175,7 @@ export async function proposeLevelGroups(
 
 /**
  * Asks Claude for even teams, optionally split into two or three leagues by level.
- * With currentGroups, the teams stay as close to those groups as possible.
+ * With currentGroups, the leagues stay as close to those groups as possible.
  */
 export async function proposeTeams(
   players: PlayerWithHistory[],
@@ -219,13 +219,9 @@ export async function proposeTeams(
       ...findSeparationProblems(proposed, keepApart),
       ...findLeagueMixProblems(proposed, anonymous, levelOrder, options.leagueCount),
       ...findUnevenLeagueProblems(proposed, options.leagueCount),
-      // Kept groups already rotate players a level up or down, so they set the order and mix instead.
-      ...(groupsToKeep.length > 0
-        ? []
-        : [
-            ...findLeagueOrderProblems(proposed, anonymous, levelOrder, options.leagueCount),
-            ...findLevelBalanceProblems(proposed, anonymous, levelOrder, options.leagueCount),
-          ]),
+      ...findLevelBalanceProblems(proposed, anonymous, levelOrder, options.leagueCount),
+      // Kept groups already rotate players a level up or down, so they set the order instead.
+      ...(groupsToKeep.length > 0 ? [] : findLeagueOrderProblems(proposed, anonymous, levelOrder, options.leagueCount)),
     ],
   );
   return teams

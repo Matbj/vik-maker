@@ -623,7 +623,7 @@ export function TeamsForm({
               </select>
             </label>
           )}
-          {hasLevelGroups && (
+          {hasLevelGroups && leagues > 1 && (
             <label className="flex items-center gap-2 text-sm">
               <input name="keepGroups" type="checkbox" />
               Behåll nivågrupperna så långt det går

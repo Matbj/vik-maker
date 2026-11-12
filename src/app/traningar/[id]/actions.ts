@@ -516,12 +516,14 @@ export async function createTeams(
       return { error: `Det finns bara ${players.length} spelare till ${teamCount} lag.` };
     }
 
+    const leagues = Math.min(leagueCount, maxLeagueCount(teamCount));
     const teams = await proposeTeams(
       await withHistory(players, workout.startsAt),
       levelOrder,
-      { teamCount, leagueCount: Math.min(leagueCount, maxLeagueCount(teamCount)) },
+      { teamCount, leagueCount: leagues },
       await loadRecentTeams(workoutId, workout.startsAt),
-      keepGroups ? await loadLevelGroups(workoutId) : [],
+      // The groups are kept per league, so with one league there is nothing to keep.
+      keepGroups && leagues > 1 ? await loadLevelGroups(workoutId) : [],
       await loadGroupingPreferences(),
     );
     await replaceGroups(
