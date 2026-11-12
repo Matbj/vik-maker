@@ -22,7 +22,7 @@ import {
   withHistory,
   type WorkoutPlayer,
 } from "@/lib/grouping/workout-players";
-import { realtimeUrl } from "@/lib/realtime/workout-live";
+import { realtimeUrl } from "@/lib/realtime/live-queries";
 import { presencePushEnabled, pushPresence } from "@/lib/svenskalag/presence";
 import { refreshWorkoutAttendance } from "@/lib/svenskalag/sync";
 

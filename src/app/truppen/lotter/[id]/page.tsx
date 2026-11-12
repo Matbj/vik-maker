@@ -5,6 +5,8 @@ import { connection } from "next/server";
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
+import { LiveUpdates } from "@/components/live-updates";
+import { realtimeUrl, sealLotteryLiveQueries } from "@/lib/realtime/live-queries";
 import { formatDueOn, formatKronor, sumTickets, ticketsLeft, ticketWord } from "@/lib/lottery";
 import {
   CloseLotteryButton,
@@ -34,7 +36,7 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
 
   const db = getDb();
   const { lotteries, lotteryTickets, players } = schema;
-  const [[lottery], rows] = await Promise.all([
+  const [[lottery], rows, liveQueries] = await Promise.all([
     db.select().from(lotteries).where(eq(lotteries.id, id)),
     // Active players, and anyone else who still has tickets in this lottery.
     db
@@ -49,8 +51,10 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
       .leftJoin(lotteryTickets, and(eq(lotteryTickets.playerId, players.id), eq(lotteryTickets.lotteryId, id)))
       .where(or(eq(players.active, true), sql`${lotteryTickets.handedOut} > 0`))
       .orderBy(asc(players.name)),
+    sealLotteryLiveQueries(id),
   ]);
   if (!lottery) notFound();
+  const liveUrl = realtimeUrl();
 
   const closed = lottery.closedAt !== null;
   const totals = sumTickets(rows);
@@ -59,6 +63,9 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
 
   return (
     <div className="space-y-6">
+      {liveUrl && liveQueries && (
+        <LiveUpdates key={id} renewUrl={`/api/realtime/lotteries/${id}`} url={liveUrl} initialQueries={liveQueries} />
+      )}
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">{lottery.name}</h2>
         <p className="text-sm text-muted">

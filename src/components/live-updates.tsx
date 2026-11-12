@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRealtimeClient, type RawLiveQuerySubscription } from "@neon/realtime/client";
-import type { WorkoutLiveQueries } from "@/lib/realtime/workout-live";
+import type { LiveQueries } from "@/lib/realtime/live-queries";
 
 /** Renew this long before the sealed queries expire. */
 const RENEW_MARGIN_MS = 10_000;
@@ -14,18 +14,18 @@ const REFRESH_DELAY_MS = 300;
 const OFFLINE_NOTICE_DELAY_MS = 5_000;
 
 /**
- * Re-renders the workout page when its data changes elsewhere, such as another coach moving
- * a player or a sync. Shows a notice while the updates are cut off. The first queries come
- * with the page, and later ones from the renew route, which requires a logged-in coach.
+ * Re-renders the page when its data changes elsewhere, such as another coach moving a player
+ * or a sync. Shows a notice while the updates are cut off. The first queries come with the
+ * page, and later ones from the renew route, which requires a logged-in coach.
  */
 export function LiveUpdates({
-  workoutId,
+  renewUrl,
   url,
   initialQueries,
 }: {
-  workoutId: string;
+  renewUrl: string;
   url: string;
-  initialQueries: WorkoutLiveQueries;
+  initialQueries: LiveQueries;
 }) {
   const router = useRouter();
   // The page sends new queries on every refresh, but the subscriptions renew their own.
@@ -62,22 +62,22 @@ export function LiveUpdates({
     };
 
     /** "denied" when logged out or Realtime is off, "offline" when the request didn't get through. */
-    const fetchQueries = async (): Promise<WorkoutLiveQueries | "denied" | "offline"> => {
+    const fetchQueries = async (): Promise<LiveQueries | "denied" | "offline"> => {
       try {
-        const response = await fetch(`/api/realtime/workouts/${workoutId}`, {
+        const response = await fetch(renewUrl, {
           method: "POST",
           cache: "no-store",
           // The proxy redirects to the login page when the session has ended.
           redirect: "manual",
         });
-        return response.ok ? ((await response.json()) as WorkoutLiveQueries) : "denied";
+        return response.ok ? ((await response.json()) as LiveQueries) : "denied";
       } catch {
         return "offline";
       }
     };
 
     let expiresAt = 0;
-    const scheduleRenew = (queries: WorkoutLiveQueries) => {
+    const scheduleRenew = (queries: LiveQueries) => {
       expiresAt = Math.min(...Object.values(queries).map((query) => query.expiresAt));
       clearTimeout(renewTimer);
       renewTimer = setTimeout(renew, Math.max(0, expiresAt - Date.now() - RENEW_MARGIN_MS));
@@ -104,7 +104,7 @@ export function LiveUpdates({
       }
     };
 
-    const subscribe = (queries: WorkoutLiveQueries) => {
+    const subscribe = (queries: LiveQueries) => {
       subscriptions = Object.values(queries).map((query) => {
         const subscription = client.subscribe(query, { materialize: false });
         let seenRows = false;
@@ -170,7 +170,7 @@ export function LiveUpdates({
       clearTimeout(noticeTimer);
       client.close();
     };
-  }, [workoutId, url, router]);
+  }, [renewUrl, url, router]);
 
   if (!offline) return null;
   return (

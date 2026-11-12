@@ -3,9 +3,9 @@ import { createRealtime, rawSql, type SealedLiveQuery } from "@neon/realtime/ser
 import { env, requireEnv } from "@/lib/env";
 
 /**
- * Live queries that tell an open workout page when its data changes, through Neon Realtime.
+ * Live queries that tell an open page when its data changes, through Neon Realtime.
  * They select ids and states only, never names, as the browser receives the rows.
- * The page re-renders on the server when any of them changes.
+ * The page re-renders on the server when any of them changes. Each takes the page's id as $1.
  */
 const WORKOUT_QUERIES = {
   // The save's lease and error text are left out: the first changes without anything to show.
@@ -21,7 +21,12 @@ const WORKOUT_QUERIES = {
     "SELECT m.group_id, m.player_id, m.added_late FROM workout_group_members m JOIN workout_groups g ON g.id = m.group_id WHERE g.workout_id = $1::uuid",
 } as const;
 
-export type WorkoutLiveQueries = Record<keyof typeof WORKOUT_QUERIES, SealedLiveQuery<unknown>>;
+const LOTTERY_QUERIES = {
+  lottery: "SELECT id, updated_at, closed_at FROM lotteries WHERE id = $1::uuid",
+  tickets: "SELECT player_id, handed_out, paid, returned FROM lottery_tickets WHERE lottery_id = $1::uuid",
+} as const;
+
+export type LiveQueries = Record<string, SealedLiveQuery<unknown>>;
 
 let realtime: ReturnType<typeof createRealtime> | undefined;
 
@@ -31,10 +36,10 @@ export function realtimeUrl() {
 }
 
 /**
- * Seals the workout's live queries. Sealed queries expire after a minute and work for
+ * Seals live queries for one page. Sealed queries expire after a minute and work for
  * anyone holding them, so only call this for a logged-in coach.
  */
-export async function sealWorkoutLiveQueries(workoutId: string): Promise<WorkoutLiveQueries | null> {
+async function sealLiveQueries(queries: Record<string, string>, id: string): Promise<LiveQueries | null> {
   if (!realtimeUrl()) return null;
   try {
     realtime ??= createRealtime({
@@ -45,14 +50,22 @@ export async function sealWorkoutLiveQueries(workoutId: string): Promise<Workout
     });
     const server = realtime;
     const entries = await Promise.all(
-      Object.entries(WORKOUT_QUERIES).map(
-        async ([name, sql]) => [name, await server.seal({ query: rawSql(sql, [workoutId]) })] as const,
+      Object.entries(queries).map(
+        async ([name, sql]) => [name, await server.seal({ query: rawSql(sql, [id]) })] as const,
       ),
     );
-    return Object.fromEntries(entries) as WorkoutLiveQueries;
+    return Object.fromEntries(entries);
   } catch (error) {
     // Live updates are a convenience, so a broken setup must not break the page.
-    console.error("Could not seal the workout's live queries", error);
+    console.error("Could not seal the live queries", error);
     return null;
   }
+}
+
+export function sealWorkoutLiveQueries(workoutId: string) {
+  return sealLiveQueries(WORKOUT_QUERIES, workoutId);
+}
+
+export function sealLotteryLiveQueries(lotteryId: string) {
+  return sealLiveQueries(LOTTERY_QUERIES, lotteryId);
 }
