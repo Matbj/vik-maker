@@ -58,7 +58,14 @@ export function ticketWord(count: number) {
 }
 
 /** One kind of ticket in a sale, such as Bingolotter. */
-export type LotteryKindInfo = { id: string; name: string; ticketPrice: number; ticketsPerPlayer: number | null };
+/** `teamShare` is what the team keeps of each ticket, in kronor, or null when not known. */
+export type LotteryKindInfo = {
+  id: string;
+  name: string;
+  ticketPrice: number;
+  teamShare: number | null;
+  ticketsPerPlayer: number | null;
+};
 
 /** A player's tickets in a sale, by kind id. A kind they haven't been handed is missing. */
 export type KindCounts = Record<string, TicketCounts>;

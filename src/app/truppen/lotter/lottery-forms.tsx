@@ -104,9 +104,9 @@ export function LotteryForm({ lottery }: { lottery?: LotteryValues }) {
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <label className="block space-y-1">
-                <span className="text-xs text-muted">Pris per lott, kr</span>
+                <span className="text-xs text-muted">Pris, kr</span>
                 <input
                   name="kindPrice"
                   type="number"
@@ -119,7 +119,19 @@ export function LotteryForm({ lottery }: { lottery?: LotteryValues }) {
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-xs text-muted">Antal per spelare</span>
+                <span className="text-xs text-muted">Lagets del, kr</span>
+                <input
+                  name="kindTeamShare"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={10000}
+                  defaultValue={row.kind?.teamShare ?? undefined}
+                  className={fieldClass}
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-xs text-muted">Per spelare</span>
                 <input
                   name="kindPerPlayer"
                   type="number"

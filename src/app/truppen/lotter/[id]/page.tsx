@@ -51,6 +51,7 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
         id: lotteryKinds.id,
         name: lotteryKinds.name,
         ticketPrice: lotteryKinds.ticketPrice,
+        teamShare: lotteryKinds.teamShare,
         ticketsPerPlayer: lotteryKinds.ticketsPerPlayer,
       })
       .from(lotteryKinds)
@@ -96,6 +97,12 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
   const value = (pick: (counts: TicketCounts) => number) =>
     all.reduce((sum, row) => sum + ticketValue(kinds, row, pick), 0);
   const totals = sumTickets(tickets);
+  const withShare = kinds.filter((kind) => kind.teamShare !== null);
+  const missingShare = kinds.filter((kind) => kind.teamShare === null);
+  const earned = tickets.reduce(
+    (sum, row) => sum + row.paid * (kinds.find((kind) => kind.id === row.kindId)?.teamShare ?? 0),
+    0,
+  );
   const left = ticketsLeft(totals);
 
   return (
@@ -114,7 +121,16 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
 
       <dl className="grid grid-cols-2 gap-2">
         <Stat label="Insamlat" value={formatKronor(value((counts) => counts.paid))} accent />
+        {withShare.length > 0 && (
+          <Stat
+            label="Intjänat till laget"
+            value={formatKronor(earned)}
+            detail={missingShare.length > 0 ? `Lagets del saknas för ${missingShare.map((kind) => kind.name).join(" och ")}` : undefined}
+            accent
+          />
+        )}
         <Stat
+          className={withShare.length > 0 ? "col-span-2" : undefined}
           label="Kvar ute"
           value={`${left} ${ticketWord(left)}`}
           detail={left > 0 ? `${formatKronor(value(ticketsLeft))} om de säljs` : undefined}
@@ -174,9 +190,21 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
   );
 }
 
-function Stat({ label, value, detail, accent }: { label: string; value: string; detail?: string; accent?: boolean }) {
+function Stat({
+  label,
+  value,
+  detail,
+  accent,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  accent?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="rounded-xl border border-black/10 px-4 py-3 dark:border-white/10">
+    <div className={`rounded-xl border border-black/10 px-4 py-3 dark:border-white/10 ${className}`}>
       <dt className="text-sm text-muted">{label}</dt>
       <dd className={`text-lg font-semibold ${accent ? "text-accent" : ""}`}>{value}</dd>
       {detail && <dd className="text-xs text-muted">{detail}</dd>}

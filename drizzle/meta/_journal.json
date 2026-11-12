@@ -99,6 +99,13 @@
       "when": 1794482646693,
       "tag": "0013_lottery_handed_out_at",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794483489365,
+      "tag": "0014_lottery_team_share",
+      "breakpoints": true
     }
   ]
 }

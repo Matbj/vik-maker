@@ -28,13 +28,14 @@ const kindFields = z.object({
   id: optional(z.uuid()),
   name: z.string().trim().min(1).max(60),
   ticketPrice: z.coerce.number().int().min(0).max(10000),
+  teamShare: optional(z.coerce.number().int().min(0).max(10000)),
   ticketsPerPlayer: optional(z.coerce.number().int().min(1).max(1000)),
 });
 
 type KindInput = z.infer<typeof kindFields>;
 
 const invalidLottery =
-  "Fyll i ett namn på försäljningen, och ett namn och ett pris för varje sorts lott. Antal per spelare och sista dag kan lämnas tomma.";
+  "Fyll i ett namn på försäljningen, och ett namn och ett pris för varje sorts lott. Lagets del kan inte vara mer än priset. Lagets del, antal per spelare och sista dag kan lämnas tomma.";
 
 const ticketsChangedElsewhere =
   "En annan ledare ändrade precis lotterna för spelaren. Kolla siffrorna och spara igen.";
@@ -50,21 +51,30 @@ function parseKinds(formData: FormData): KindInput[] | null {
   const ids = formData.getAll("kindId");
   const names = formData.getAll("kindName");
   const prices = formData.getAll("kindPrice");
+  const shares = formData.getAll("kindTeamShare");
   const perPlayer = formData.getAll("kindPerPlayer");
   const kinds = z
     .array(kindFields)
     .min(1)
     .max(10)
     .safeParse(
-      names.map((name, i) => ({ id: ids[i], name, ticketPrice: prices[i], ticketsPerPlayer: perPlayer[i] })),
+      names.map((name, i) => ({
+        id: ids[i],
+        name,
+        ticketPrice: prices[i],
+        teamShare: shares[i],
+        ticketsPerPlayer: perPlayer[i],
+      })),
     );
-  return kinds.success ? kinds.data : null;
+  if (!kinds.success) return null;
+  return kinds.data.some((kind) => (kind.teamShare ?? 0) > kind.ticketPrice) ? null : kinds.data;
 }
 
 function kindValues(kind: KindInput, sortOrder: number) {
   return {
     name: kind.name,
     ticketPrice: kind.ticketPrice,
+    teamShare: kind.teamShare ?? null,
     ticketsPerPlayer: kind.ticketsPerPlayer ?? null,
     sortOrder,
   };
@@ -85,6 +95,7 @@ async function loadKinds(lotteryId: string) {
       id: lotteryKinds.id,
       name: lotteryKinds.name,
       ticketPrice: lotteryKinds.ticketPrice,
+      teamShare: lotteryKinds.teamShare,
       ticketsPerPlayer: lotteryKinds.ticketsPerPlayer,
     })
     .from(lotteryKinds)
@@ -105,7 +116,12 @@ export async function createLottery(_previous: LotteryState, formData: FormData)
   await recordAudit("lottery.create", () => ({
     lottery: { id, name: lottery.name },
     dueOn: lottery.dueOn,
-    kinds: kindRows.map(({ name, ticketPrice, ticketsPerPlayer }) => ({ name, ticketPrice, ticketsPerPlayer })),
+    kinds: kindRows.map(({ name, ticketPrice, teamShare, ticketsPerPlayer }) => ({
+      name,
+      ticketPrice,
+      teamShare,
+      ticketsPerPlayer,
+    })),
   }));
   revalidatePath("/truppen/lotter");
   redirect(`/truppen/lotter/${id}`);
@@ -167,13 +183,19 @@ export async function updateLottery(_previous: LotteryState, formData: FormData)
       before: {
         name: before.name,
         dueOn: before.dueOn,
-        kinds: kindsBefore.map(({ name, ticketPrice, ticketsPerPlayer }) => ({ name, ticketPrice, ticketsPerPlayer })),
+        kinds: kindsBefore.map(({ name, ticketPrice, teamShare, ticketsPerPlayer }) => ({
+          name,
+          ticketPrice,
+          teamShare,
+          ticketsPerPlayer,
+        })),
       },
       after: {
         ...after,
-        kinds: kinds.map(({ name, ticketPrice, ticketsPerPlayer }) => ({
+        kinds: kinds.map(({ name, ticketPrice, teamShare, ticketsPerPlayer }) => ({
           name,
           ticketPrice,
+          teamShare: teamShare ?? null,
           ticketsPerPlayer: ticketsPerPlayer ?? null,
         })),
       },

@@ -251,6 +251,8 @@ export const lotteryKinds = pgTable(
     name: text("name").notNull(),
     /** What one ticket costs, in whole kronor. */
     ticketPrice: integer("ticket_price").notNull(),
+    /** What the team keeps of each ticket's price, in whole kronor. Null when not known. */
+    teamShare: integer("team_share"),
     /** How many tickets of this kind a player is usually handed. */
     ticketsPerPlayer: integer("tickets_per_player"),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -259,6 +261,7 @@ export const lotteryKinds = pgTable(
   (t) => [
     index("lottery_kinds_lottery_id_idx").on(t.lotteryId),
     check("lottery_kinds_ticket_price_check", sql`${t.ticketPrice} >= 0`),
+    check("lottery_kinds_team_share_check", sql`${t.teamShare} >= 0 and ${t.teamShare} <= ${t.ticketPrice}`),
   ],
 );
 
