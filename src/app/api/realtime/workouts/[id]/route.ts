@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { currentCoach } from "@/lib/auth/sessions";
-import { sealWorkoutLiveQueries } from "@/lib/realtime/workout-live";
+import { sealWorkoutLiveQueries } from "@/lib/realtime/live-queries";
 
 /**
  * Renews the live queries of an open workout page before they expire, so a coach who

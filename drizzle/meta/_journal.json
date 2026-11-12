@@ -85,6 +85,20 @@
       "when": 1794349830876,
       "tag": "0011_live_attendance",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794481822621,
+      "tag": "0012_lotteries",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794482646693,
+      "tag": "0013_lottery_handed_out_at",
+      "breakpoints": true
     }
   ]
 }

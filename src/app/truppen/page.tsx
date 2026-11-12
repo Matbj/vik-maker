@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { asc, eq, isNotNull, or } from "drizzle-orm";
+import Link from "next/link";
+import { asc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { env } from "@/lib/env";
 import { Notice } from "@/components/notice";
@@ -31,7 +32,7 @@ async function Team() {
   }
 
   const db = getDb();
-  const [coaches, players] = await Promise.all([
+  const [coaches, players, [{ openLotteries }]] = await Promise.all([
     db
       .select({
         id: schema.coaches.id,
@@ -54,10 +55,24 @@ async function Team() {
       .leftJoin(schema.levels, eq(schema.players.levelId, schema.levels.id))
       .where(eq(schema.players.active, true))
       .orderBy(asc(schema.levels.sortOrder), asc(schema.players.name)),
+    db
+      .select({ openLotteries: sql<number>`count(*)::int` })
+      .from(schema.lotteries)
+      .where(isNull(schema.lotteries.closedAt)),
   ]);
 
   return (
     <div className="space-y-6">
+      <Link
+        href="/truppen/lotter"
+        className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-4 py-3 dark:border-white/10"
+      >
+        <span className="font-medium">Lotteriförsäljning</span>
+        <span className="text-sm text-muted">
+          {openLotteries === 0 ? "Ingen pågår" : `${openLotteries} pågår`} ›
+        </span>
+      </Link>
+
       {coaches.length > 0 && (
         <div className="space-y-2">
           <h2 className="text-lg font-semibold">Ledare</h2>

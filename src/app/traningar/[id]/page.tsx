@@ -12,11 +12,11 @@ import {
   loadWorkoutCoaches,
   loadWorkoutPlayers,
 } from "@/lib/grouping/workout-players";
-import { realtimeUrl, sealWorkoutLiveQueries } from "@/lib/realtime/workout-live";
+import { realtimeUrl, sealWorkoutLiveQueries } from "@/lib/realtime/live-queries";
 import { presencePushEnabled } from "@/lib/svenskalag/presence";
 import { AttendanceList, LiveBanner, StartWorkoutButton, type PersonRow } from "./attendance";
 import { AttendanceProvider } from "./attendance-state";
-import { LiveUpdates } from "./live-updates";
+import { LiveUpdates } from "@/components/live-updates";
 import { DeleteGroupsButton, LevelGroupsForm, PlayerRow, RefreshAttendanceButton, SpreadButton, TeamsForm, UnplacedPlayer } from "./grouping-forms";
 
 const DEFAULT_PLAYERS_PER_GROUP = 8;
@@ -192,7 +192,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
   const page = (
     <div className="space-y-8">
       {liveUrl && liveQueries && (
-        <LiveUpdates key={id} workoutId={id} url={liveUrl} initialQueries={liveQueries} />
+        <LiveUpdates key={id} renewUrl={`/api/realtime/workouts/${id}`} url={liveUrl} initialQueries={liveQueries} />
       )}
       <header>
         <div className="flex items-start justify-between gap-3">
