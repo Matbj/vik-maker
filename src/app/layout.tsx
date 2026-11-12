@@ -18,9 +18,20 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const description = "Träningsgrupper, lag och närvaro på ett kick.";
+
 export const metadata: Metadata = {
   title: "VIK Playmaker",
-  description: "Nivåanpassade träningsgrupper för laget, byggda från anmälningarna på svenskalag.se.",
+  description,
+  applicationName: "VIK Playmaker",
+  appleWebApp: { title: "Playmaker" },
+  openGraph: {
+    title: "VIK Playmaker",
+    description,
+    siteName: "VIK Playmaker",
+    locale: "sv_SE",
+    type: "website",
+  },
 };
 
 export const viewport: Viewport = {
