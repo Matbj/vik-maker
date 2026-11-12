@@ -107,10 +107,9 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
   const totals = sumTickets(tickets);
   const withShare = kinds.filter((kind) => kind.teamShare !== null);
   const missingShare = kinds.filter((kind) => kind.teamShare === null);
-  const earned = tickets.reduce(
-    (sum, row) => sum + row.paid * (kinds.find((kind) => kind.id === row.kindId)?.teamShare ?? 0),
-    0,
-  );
+  const teamValue = (pick: (counts: TicketCounts) => number) =>
+    tickets.reduce((sum, row) => sum + pick(row) * (kinds.find((kind) => kind.id === row.kindId)?.teamShare ?? 0), 0);
+  const earned = teamValue((counts) => counts.paid);
   const left = ticketsLeft(totals);
 
   return (
@@ -141,7 +140,13 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
           className={withShare.length > 0 ? "col-span-2" : undefined}
           label="Kvar ute"
           value={`${left} ${ticketWord(left)}`}
-          detail={left > 0 ? `${formatKronor(value(ticketsLeft))} om de säljs` : undefined}
+          detail={
+            left > 0
+              ? `${formatKronor(value(ticketsLeft))} om de säljs${
+                  withShare.length > 0 ? `, varav ${formatKronor(teamValue(ticketsLeft))} till laget` : ""
+                }`
+              : undefined
+          }
         />
       </dl>
 
