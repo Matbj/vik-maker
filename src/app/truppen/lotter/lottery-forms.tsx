@@ -47,8 +47,12 @@ function FormError({ state }: { state: LotteryState }) {
 
 type LotteryValues = { id: string; name: string; dueOn: string | null; kinds: LotteryKindInfo[] };
 
-/** A row of the kinds editor. `key` keeps an unsaved row's inputs while rows are removed. */
-type KindRow = { key: string; kind?: LotteryKindInfo };
+/**
+ * A row of the kinds editor: a saved kind's id, or a key for a new one, which keeps the row's
+ * inputs while rows are removed. A saved kind's values are read from the props, so the inputs
+ * show what was saved when React resets the form after the save.
+ */
+type KindRow = { key: string; kindId?: string };
 
 let nextRowKey = 0;
 const newRow = (): KindRow => ({ key: `new-${nextRowKey++}` });
@@ -57,8 +61,9 @@ const newRow = (): KindRow => ({ key: `new-${nextRowKey++}` });
 export function LotteryForm({ lottery }: { lottery?: LotteryValues }) {
   const [state, action, pending] = useActionState(lottery ? updateLottery : createLottery, {});
   const [rows, setRows] = useState<KindRow[]>(() =>
-    lottery ? lottery.kinds.map((kind) => ({ key: kind.id, kind })) : [newRow()],
+    lottery ? lottery.kinds.map((kind) => ({ key: kind.id, kindId: kind.id })) : [newRow()],
   );
+  const kindsById = new Map(lottery?.kinds.map((kind) => [kind.id, kind]));
   return (
     <form action={action} className="space-y-4">
       {lottery && <input type="hidden" name="lotteryId" value={lottery.id} />}
@@ -80,9 +85,9 @@ export function LotteryForm({ lottery }: { lottery?: LotteryValues }) {
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Sorters lotter</legend>
-        {rows.map((row, i) => (
+        {rows.map((row) => ({ ...row, kind: row.kindId ? kindsById.get(row.kindId) : undefined })).map((row, i) => (
           <div key={row.key} className="space-y-2 rounded-lg border border-black/10 p-3 dark:border-white/10">
-            <input type="hidden" name="kindId" value={row.kind?.id ?? ""} />
+            <input type="hidden" name="kindId" value={row.kindId ?? ""} />
             <div className="flex items-center gap-2">
               <input
                 name="kindName"
