@@ -4,7 +4,6 @@ import { useActionState, useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import {
   formatKronor,
-  handOutLabel,
   noTickets,
   playerTotals,
   ticketsLeft,
@@ -267,7 +266,7 @@ export function LotteryPlayers({
                     </span>
                   )}
                 </button>
-                {quickHandOut && <QuickHandOut lotteryId={lotteryId} playerId={player.id} kinds={kinds} />}
+                {quickHandOut && <QuickHandOut lotteryId={lotteryId} playerId={player.id} />}
               </li>
             );
           })}
@@ -291,14 +290,14 @@ export function LotteryPlayers({
 }
 
 /** Hands a player who has no tickets the usual number of every kind, in one tap. */
-function QuickHandOut({ lotteryId, playerId, kinds }: { lotteryId: string; playerId: string; kinds: LotteryKindInfo[] }) {
+function QuickHandOut({ lotteryId, playerId }: { lotteryId: string; playerId: string }) {
   const [state, action, pending] = useActionState(handOutUsual, {});
   return (
     <form action={action} className="shrink-0 pr-3 text-right">
       <input type="hidden" name="lotteryId" value={lotteryId} />
       <input type="hidden" name="playerId" value={playerId} />
       <button type="submit" disabled={pending} className={`${buttonClass} px-3 py-1.5`}>
-        {pending ? "Delar ut…" : handOutLabel(kinds)}
+        {pending ? "Sparar…" : "Markera utdelat"}
       </button>
       {state.error && (
         <span role="alert" className="block max-w-40 text-xs text-red-600 dark:text-red-400">

@@ -71,10 +71,3 @@ export function ticketValue(
 export function usualHandOut(kinds: LotteryKindInfo[]) {
   return kinds.filter((kind) => kind.ticketsPerPlayer !== null);
 }
-
-/** "Dela ut 20" for one kind, "Dela ut 10 + 15" for several. */
-export function handOutLabel(kinds: LotteryKindInfo[]) {
-  return `Dela ut ${usualHandOut(kinds)
-    .map((kind) => kind.ticketsPerPlayer)
-    .join(" + ")}`;
-}
