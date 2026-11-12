@@ -276,8 +276,6 @@ export const lotteryTickets = pgTable(
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
     handedOut: integer("handed_out").notNull().default(0),
-    /** No longer used and always 0, as payments are kept in kronor in `lottery_payments`. */
-    paid: integer("paid").notNull().default(0),
     /** Unsold tickets handed back to the coaches. */
     returned: integer("returned").notNull().default(0),
     /** When the player was first handed tickets of this kind. Null while none are handed out. */
@@ -288,7 +286,7 @@ export const lotteryTickets = pgTable(
     primaryKey({ columns: [t.kindId, t.playerId] }),
     check(
       "lottery_tickets_counts_check",
-      sql`${t.paid} >= 0 and ${t.returned} >= 0 and ${t.paid} + ${t.returned} <= ${t.handedOut}`,
+      sql`${t.returned} >= 0 and ${t.returned} <= ${t.handedOut}`,
     ),
   ],
 );
