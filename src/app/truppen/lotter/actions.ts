@@ -234,8 +234,8 @@ export async function handOutUsual(_previous: LotteryState, formData: FormData):
     const lottery = await openLottery(lotteryId);
     // One statement, so tickets another coach handed the player meanwhile are kept.
     const { rows } = await getDb().execute(sql`
-      insert into lottery_tickets (kind_id, player_id, handed_out)
-      select k.id, p.id, k.tickets_per_player
+      insert into lottery_tickets (kind_id, player_id, handed_out, handed_out_at)
+      select k.id, p.id, k.tickets_per_player, now()
       from players p
       cross join lottery_kinds k
       join lotteries l on l.id = k.lottery_id and l.closed_at is null
@@ -248,7 +248,7 @@ export async function handOutUsual(_previous: LotteryState, formData: FormData):
           where tk.lottery_id = ${lotteryId} and t.player_id = p.id and t.handed_out > 0
         )
       on conflict (kind_id, player_id) do update
-        set handed_out = excluded.handed_out, updated_at = now()
+        set handed_out = excluded.handed_out, handed_out_at = excluded.handed_out_at, updated_at = now()
         where lottery_tickets.handed_out = 0
       returning player_id
     `);
@@ -326,14 +326,15 @@ export async function saveTickets(_previous: LotteryState, formData: FormData): 
         from input i
         left join lottery_tickets t on t.kind_id = i.kind_id and t.player_id = ${playerId}
       )
-      insert into lottery_tickets (kind_id, player_id, handed_out, paid, returned)
-      select i.kind_id, ${playerId}, i.handed_out, i.paid, i.returned
+      insert into lottery_tickets (kind_id, player_id, handed_out, paid, returned, handed_out_at)
+      select i.kind_id, ${playerId}, i.handed_out, i.paid, i.returned, case when i.handed_out > 0 then now() end
       from input i
       join lottery_kinds k on k.id = i.kind_id and k.lottery_id = ${lotteryId}
       join lotteries l on l.id = k.lottery_id and l.closed_at is null
       where (select unchanged from seen)
       on conflict (kind_id, player_id) do update
         set handed_out = excluded.handed_out, paid = excluded.paid, returned = excluded.returned,
+          handed_out_at = case when excluded.handed_out > 0 then coalesce(lottery_tickets.handed_out_at, now()) end,
           updated_at = now()
       returning kind_id
     `);
@@ -350,6 +351,43 @@ export async function saveTickets(_previous: LotteryState, formData: FormData): 
     }));
   } catch (error) {
     return errorState(error, "Det gick inte att spara lotterna. Försök igen.");
+  }
+  revalidatePath("/truppen/lotter", "layout");
+  return { saved: true };
+}
+
+/** Takes back all of a player's tickets in a sale, as long as none are paid for or handed back. */
+export async function undoHandOut(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
+  const form = z.object({ lotteryId: z.uuid(), playerId: z.uuid() }).safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "Det gick inte att ångra utdelningen. Ladda om sidan och försök igen." };
+  const { lotteryId, playerId } = form.data;
+
+  try {
+    const lottery = await openLottery(lotteryId);
+    // One statement, so a payment another coach registered meanwhile stops it.
+    const { rows } = await getDb().execute(sql`
+      delete from lottery_tickets t
+      using lottery_kinds k
+      where k.id = t.kind_id
+        and k.lottery_id = ${lotteryId}
+        and t.player_id = ${playerId}
+        and not exists (
+          select 1 from lottery_tickets t2
+          join lottery_kinds k2 on k2.id = t2.kind_id
+          where k2.lottery_id = ${lotteryId} and t2.player_id = ${playerId} and (t2.paid > 0 or t2.returned > 0)
+        )
+      returning k.name, t.handed_out
+    `);
+    if (rows.length === 0) {
+      throw new UserError("Spelaren har redan betalt eller lämnat tillbaka lotter, så utdelningen kan inte ångras.");
+    }
+    await recordAudit("lottery.undo_hand_out", async () => ({
+      lottery: { id: lottery.id, name: lottery.name },
+      player: await playerRef(playerId),
+      kinds: rows.map((row) => ({ name: row.name, handedOut: row.handed_out })),
+    }));
+  } catch (error) {
+    return errorState(error, "Det gick inte att ångra utdelningen. Försök igen.");
   }
   revalidatePath("/truppen/lotter", "layout");
   return { saved: true };

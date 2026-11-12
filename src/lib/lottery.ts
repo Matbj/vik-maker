@@ -42,6 +42,17 @@ export function formatDueOn(dueOn: string) {
   return dueFormat.format(new Date(`${dueOn}T00:00:00Z`));
 }
 
+const handedOutFormat = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Europe/Stockholm",
+  day: "numeric",
+  month: "long",
+});
+
+/** When a player was handed tickets, such as "12 november". */
+export function formatHandedOutAt(at: Date) {
+  return handedOutFormat.format(at);
+}
+
 export function ticketWord(count: number) {
   return count === 1 ? "lott" : "lotter";
 }

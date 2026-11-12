@@ -33,6 +33,7 @@ export const AUDIT_ACTIONS = {
   "lottery.reopen": "Öppnade en lotteriförsäljning igen",
   "lottery.delete": "Tog bort en lotteriförsäljning",
   "lottery.hand_out": "Delade ut lotter",
+  "lottery.undo_hand_out": "Ångrade en utdelning av lotter",
   "lottery.tickets": "Ändrade en spelares lotter",
 } as const;
 

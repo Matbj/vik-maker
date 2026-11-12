@@ -277,6 +277,8 @@ export const lotteryTickets = pgTable(
     paid: integer("paid").notNull().default(0),
     /** Unsold tickets handed back to the coaches. */
     returned: integer("returned").notNull().default(0),
+    /** When the player was first handed tickets of this kind. Null while none are handed out. */
+    handedOutAt: timestamp("handed_out_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

@@ -3,6 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import {
+  formatHandedOutAt,
   formatKronor,
   noTickets,
   playerTotals,
@@ -22,6 +23,7 @@ import {
   handOutUsual,
   saveTickets,
   setLotteryClosed,
+  undoHandOut,
   updateLottery,
   type LotteryState,
 } from "./actions";
@@ -155,7 +157,8 @@ function kindsSentence(kinds: LotteryKindInfo[]) {
     .join(" och ");
 }
 
-export type LotteryPlayer = { id: string; name: string; tickets: KindCounts };
+/** `handedOutAt` is when the player was first handed tickets in the sale. */
+export type LotteryPlayer = { id: string; name: string; tickets: KindCounts; handedOutAt: Date | null };
 
 type Filter = "all" | Exclude<TicketStatus, "none">;
 
@@ -178,12 +181,14 @@ function statusLabel(totals: TicketCounts) {
   return `${ticketsLeft(totals)} kvar`;
 }
 
-/** What a player has been handed, such as "10 Bingolotter · 15 Skraplotter · 8 betalda". */
-function ticketsSummary(kinds: LotteryKindInfo[], tickets: KindCounts, totals: TicketCounts) {
+/** What a player has been handed, such as "Utdelat 12 november · 10 Bingolotter · 15 Skraplotter · 8 betalda". */
+function ticketsSummary(kinds: LotteryKindInfo[], player: LotteryPlayer, totals: TicketCounts) {
+  const { tickets } = player;
   const handed = kinds
     .filter((kind) => (tickets[kind.id]?.handedOut ?? 0) > 0)
     .map((kind) => (kinds.length === 1 ? `${tickets[kind.id].handedOut} ${ticketWord(tickets[kind.id].handedOut)}` : `${tickets[kind.id].handedOut} ${kind.name}`));
-  return [...handed, `${totals.paid} betalda`, ...(totals.returned > 0 ? [`${totals.returned} tillbaka`] : [])].join(" · ");
+  const when = player.handedOutAt ? [`Utdelat ${formatHandedOutAt(player.handedOutAt)}`] : [];
+  return [...when, ...handed, `${totals.paid} betalda`, ...(totals.returned > 0 ? [`${totals.returned} tillbaka`] : [])].join(" · ");
 }
 
 /** Every player with their tickets. Tapping one opens a dialog to change the numbers. */
@@ -255,7 +260,7 @@ export function LotteryPlayers({
                     <span className="block truncate">{player.name}</span>
                     {status !== "none" && (
                       <span className="block text-sm text-muted">
-                        {ticketsSummary(kinds, player.tickets, player.totals)}
+                        {ticketsSummary(kinds, player, player.totals)}
                       </span>
                     )}
                   </span>
@@ -372,16 +377,50 @@ function TicketsForm({
     if (result.saved) onDone();
     return result;
   }, {});
+  const [confirmingUndo, setConfirmingUndo] = useState(false);
+  const [undoState, undoAction, undoing] = useActionState(async (previous: LotteryState, formData: FormData) => {
+    const result = await undoHandOut(previous, formData);
+    if (result.saved) onDone();
+    return result;
+  }, {});
   const set = (kindId: string, key: keyof TicketCounts, value: number) =>
     setTickets({ ...tickets, [kindId]: { ...tickets[kindId], [key]: value } });
 
   const totals = playerTotals(kinds, tickets);
   const left = ticketsLeft(totals);
   const overdrawn = kinds.some((kind) => ticketsLeft(tickets[kind.id]) < 0);
-  const showHandOut = ticketStatus(playerTotals(kinds, seenTickets)) === "none" && usualHandOut(kinds).length > 0;
+  const seenTotals = playerTotals(kinds, seenTickets);
+  const showHandOut = ticketStatus(seenTotals) === "none" && usualHandOut(kinds).length > 0;
+  // Only before anything is paid for or handed back, so no money is lost from the records.
+  const canUndo = seenTotals.handedOut > 0 && seenTotals.paid + seenTotals.returned === 0;
+
+  if (confirmingUndo) {
+    return (
+      <form action={undoAction} className="space-y-4">
+        <input type="hidden" name="lotteryId" value={lotteryId} />
+        <input type="hidden" name="playerId" value={player.id} />
+        <p className="text-sm">
+          Ångra utdelningen? Spelarens {seenTotals.handedOut} {ticketWord(seenTotals.handedOut)}{" "}
+          tas bort från försäljningen.
+        </p>
+        <FormError state={undoState} />
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setConfirmingUndo(false)} className={secondaryButtonClass}>
+            Avbryt
+          </button>
+          <button type="submit" disabled={undoing} className={dangerButtonClass}>
+            {undoing ? "Ångrar…" : "Ångra utdelningen"}
+          </button>
+        </div>
+      </form>
+    );
+  }
 
   return (
     <div className="space-y-4">
+      {player.handedOutAt && (
+        <p className="text-sm text-muted">Utdelat {formatHandedOutAt(player.handedOutAt)}</p>
+      )}
       {showHandOut && (
         <form action={handOutAction} className="space-y-2">
           <input type="hidden" name="lotteryId" value={lotteryId} />
@@ -442,7 +481,12 @@ function TicketsForm({
         </p>
 
         <FormError state={state} />
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
+          {canUndo && (
+            <button type="button" onClick={() => setConfirmingUndo(true)} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
+              Ångra utdelningen
+            </button>
+          )}
           <button type="button" onClick={onDone} className={secondaryButtonClass}>
             Avbryt
           </button>

@@ -63,6 +63,7 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
         handedOut: lotteryTickets.handedOut,
         paid: lotteryTickets.paid,
         returned: lotteryTickets.returned,
+        handedOutAt: lotteryTickets.handedOutAt,
       })
       .from(lotteryTickets)
       .innerJoin(lotteryKinds, eq(lotteryKinds.id, lotteryTickets.kindId))
@@ -79,14 +80,16 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
     .from(players)
     .where(holders.length > 0 ? or(eq(players.active, true), inArray(players.id, holders)) : eq(players.active, true))
     .orderBy(asc(players.name));
-  const rows: LotteryPlayer[] = playerRows.map((player) => ({
-    ...player,
-    tickets: Object.fromEntries(
-      tickets
-        .filter((row) => row.playerId === player.id)
-        .map(({ kindId, handedOut, paid, returned }) => [kindId, { handedOut, paid, returned }]),
-    ),
-  }));
+  const rows: LotteryPlayer[] = playerRows.map((player) => {
+    const own = tickets.filter((row) => row.playerId === player.id);
+    const handedOutAt = own.flatMap((row) => (row.handedOutAt ? [row.handedOutAt.getTime()] : []));
+    return {
+      ...player,
+      tickets: Object.fromEntries(own.map(({ kindId, handedOut, paid, returned }) => [kindId, { handedOut, paid, returned }])),
+      // The first time, if kinds were handed out on different days.
+      handedOutAt: handedOutAt.length > 0 ? new Date(Math.min(...handedOutAt)) : null,
+    };
+  });
 
   const closed = lottery.closedAt !== null;
   const all = tickets.map((row) => ({ [row.kindId]: row }));
