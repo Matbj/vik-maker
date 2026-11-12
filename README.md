@@ -70,7 +70,7 @@ On a workout's page, coaches create groups by hand, and they stay until replaced
   groups. It rotates some players up or down so groups don't go stale. Code checks the result:
   nobody ever moves more than one level. Players are sent as anonymous ids, never names.
 - **Teams** are computed by Claude too, even in size and strength and varied from recent teams.
-  With 4 or more teams they can be split into two leagues by level.
+  With 4 or more teams they can be split into two leagues by level, and with 6 or more into three.
 
 Under Settings, coaches list players to keep apart, which Claude avoids very strongly in groups,
 teams and spreading, and retries when it slips, and write notes that Claude follows. Notes are sent to Claude as written,

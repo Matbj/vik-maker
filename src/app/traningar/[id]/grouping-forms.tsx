@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useId, useRef, useState } from "react";
+import { leagueSizes, maxLeagueCount } from "@/lib/grouping/teams";
 import {
   assignPlayer,
   createLevelGroups,
@@ -616,6 +617,9 @@ export function TeamsForm({
 }) {
   const [state, action, pending] = useActionState(createTeams, {});
   const { count, countInput, sizeInput, smallest, largest } = useLinkedCounts(playerCount, initialCount, 16);
+  const [leagueCount, setLeagueCount] = useState(1);
+  const maxLeagues = maxLeagueCount(count);
+  const leagues = Math.min(leagueCount, maxLeagues);
   const { dialogRef, confirmRef, onSubmit } = useConfirmSubmit(hasTeams);
   return (
     <>
@@ -635,10 +639,21 @@ export function TeamsForm({
             Spelare per lag
             <input type="number" min={1} className={inputClass} {...sizeInput} />
           </label>
-          {count >= 4 && (
+          {maxLeagues > 1 && (
             <label className="flex items-center gap-2 text-sm">
-              <input name="twoLeagues" type="checkbox" />
-              Två serier
+              Serier
+              <select
+                name="leagueCount"
+                value={leagues}
+                onChange={(event) => setLeagueCount(Number(event.target.value))}
+                className="rounded-lg border border-black/10 bg-transparent px-2 py-1.5 dark:border-white/10"
+              >
+                {Array.from({ length: maxLeagues }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {i + 1}
+                  </option>
+                ))}
+              </select>
             </label>
           )}
           {hasLevelGroups && (
@@ -660,6 +675,7 @@ export function TeamsForm({
         </div>
         <p className="text-sm text-muted">
           {count} lag med {smallest === largest ? smallest : `${smallest}–${largest}`} spelare
+          {leagues > 1 && ` i ${leagues} serier (${leagueSizes(count, leagues).join(" + ")} lag)`}
         </p>
         <FormError state={state} />
       </form>
