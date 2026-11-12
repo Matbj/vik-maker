@@ -157,13 +157,12 @@ function kindsSentence(kinds: LotteryKindInfo[]) {
 
 export type LotteryPlayer = { id: string; name: string; tickets: KindCounts };
 
-type Filter = "all" | TicketStatus;
+type Filter = "all" | Exclude<TicketStatus, "none">;
 
 const filters: { value: Filter; label: string }[] = [
   { value: "all", label: "Alla" },
-  { value: "out", label: "Har kvar" },
-  { value: "none", label: "Inga lotter" },
-  { value: "done", label: "Klara" },
+  { value: "out", label: "Säljer" },
+  { value: "done", label: "Redovisade" },
 ];
 
 const statusClass: Record<TicketStatus, string> = {
@@ -175,7 +174,7 @@ const statusClass: Record<TicketStatus, string> = {
 function statusLabel(totals: TicketCounts) {
   const status = ticketStatus(totals);
   if (status === "none") return "Inga lotter";
-  if (status === "done") return "Klar";
+  if (status === "done") return "Redovisad";
   return `${ticketsLeft(totals)} kvar`;
 }
 
@@ -438,7 +437,7 @@ function TicketsForm({
             : left > 0
               ? `${left} ${ticketWord(left)} kvar att redovisa, ${formatKronor(ticketValue(kinds, tickets, ticketsLeft))} om de säljs.`
               : totals.handedOut > 0
-                ? `Klar. ${formatKronor(ticketValue(kinds, tickets, (counts) => counts.paid))} betalt.`
+                ? `Allt redovisat. ${formatKronor(ticketValue(kinds, tickets, (counts) => counts.paid))} betalt.`
                 : "Inga lotter utdelade."}
         </p>
 
