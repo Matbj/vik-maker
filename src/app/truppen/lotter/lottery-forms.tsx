@@ -1,13 +1,14 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useId, useRef, useState } from "react";
 import { Dialog } from "@/components/dialog";
 import {
+  amountOwed,
   formatHandedOutAt,
   formatKronor,
   noTickets,
   playerTotals,
-  ticketsLeft,
+  ticketsKept,
   ticketStatus,
   ticketValue,
   ticketWord,
@@ -24,6 +25,7 @@ import {
   saveTickets,
   addToLottery,
   removeFromLottery,
+  removePayment,
   setLotteryClosed,
   undoHandOut,
   updateLottery,
@@ -176,8 +178,20 @@ function kindsSentence(kinds: LotteryKindInfo[]) {
     .join(" och ");
 }
 
-/** `handedOutAt` is when the player was first handed tickets in the sale. */
-export type LotteryPlayer = { id: string; name: string; tickets: KindCounts; handedOutAt: Date | null };
+export type LotteryPayment = { id: string; amount: number; createdAt: Date };
+
+/**
+ * `handedOutAt` is when the player was first handed tickets in the sale, and `paid` the sum of
+ * their payments.
+ */
+export type LotteryPlayer = {
+  id: string;
+  name: string;
+  tickets: KindCounts;
+  payments: LotteryPayment[];
+  paid: number;
+  handedOutAt: Date | null;
+};
 
 type Filter = "all" | TicketStatus;
 
@@ -195,21 +209,27 @@ const statusClass: Record<TicketStatus, string> = {
   done: "bg-green-600/15 text-green-700 dark:text-green-400",
 };
 
-function statusLabel(totals: TicketCounts) {
-  const status = ticketStatus(totals);
+function statusLabel(kinds: LotteryKindInfo[], player: LotteryPlayer) {
+  const status = ticketStatus(kinds, player.tickets, player.paid);
   if (status === "none") return "Inga lotter";
   if (status === "done") return "Redovisad";
-  return `${ticketsLeft(totals)} kvar`;
+  return `${formatKronor(amountOwed(kinds, player.tickets, player.paid))} kvar`;
 }
 
-/** What a player has been handed, such as "Utdelat 12 november · 10 Bingolotter · 15 Skraplotter · 8 betalda". */
-function ticketsSummary(kinds: LotteryKindInfo[], player: LotteryPlayer, totals: TicketCounts) {
+/** What a player has been handed, such as "Utdelat 12 november · 10 Bingolotter · 15 Skraplotter · 800 kr inlämnat". */
+function ticketsSummary(kinds: LotteryKindInfo[], player: LotteryPlayer) {
   const { tickets } = player;
+  const totals = playerTotals(kinds, tickets);
   const handed = kinds
     .filter((kind) => (tickets[kind.id]?.handedOut ?? 0) > 0)
     .map((kind) => (kinds.length === 1 ? `${tickets[kind.id].handedOut} ${ticketWord(tickets[kind.id].handedOut)}` : `${tickets[kind.id].handedOut} ${kind.name}`));
   const when = player.handedOutAt ? [`Utdelat ${formatHandedOutAt(player.handedOutAt)}`] : [];
-  return [...when, ...handed, `${totals.paid} betalda`, ...(totals.returned > 0 ? [`${totals.returned} tillbaka`] : [])].join(" · ");
+  return [
+    ...when,
+    ...handed,
+    ...(totals.returned > 0 ? [`${totals.returned} tillbaka`] : []),
+    `${formatKronor(player.paid)} inlämnat`,
+  ].join(" · ");
 }
 
 /** Every player with their tickets. Tapping one opens a dialog to change the numbers. */
@@ -228,10 +248,10 @@ export function LotteryPlayers({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [openCount, setOpenCount] = useState(0);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const withTotals = players.map((player) => ({ ...player, totals: playerTotals(kinds, player.tickets) }));
-  const selected = withTotals.find((player) => player.id === selectedId);
+  const withStatus = players.map((player) => ({ ...player, status: ticketStatus(kinds, player.tickets, player.paid) }));
+  const selected = withStatus.find((player) => player.id === selectedId);
   const canHandOut = !closed && usualHandOut(kinds).length > 0;
-  const shown = filter === "all" ? withTotals : withTotals.filter((player) => ticketStatus(player.totals) === filter);
+  const shown = filter === "all" ? withStatus : withStatus.filter((player) => player.status === filter);
 
   return (
     <div className="space-y-3">
@@ -239,9 +259,7 @@ export function LotteryPlayers({
         {filters.map((option) => {
           const active = filter === option.value;
           const count =
-            option.value === "all"
-              ? withTotals.length
-              : withTotals.filter((player) => ticketStatus(player.totals) === option.value).length;
+            option.value === "all" ? withStatus.length : withStatus.filter((player) => player.status === option.value).length;
           return (
             <button
               key={option.value}
@@ -263,8 +281,7 @@ export function LotteryPlayers({
       ) : (
         <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
           {shown.map((player) => {
-            const status = ticketStatus(player.totals);
-            const quickHandOut = canHandOut && status === "none";
+            const quickHandOut = canHandOut && player.status === "none";
             return (
               <li key={player.id} className="flex items-center">
                 <button
@@ -279,15 +296,13 @@ export function LotteryPlayers({
                 >
                   <span className="min-w-0">
                     <span className="block truncate">{player.name}</span>
-                    {status !== "none" && (
-                      <span className="block text-sm text-muted">
-                        {ticketsSummary(kinds, player, player.totals)}
-                      </span>
+                    {player.status !== "none" && (
+                      <span className="block text-sm text-muted">{ticketsSummary(kinds, player)}</span>
                     )}
                   </span>
                   {!quickHandOut && (
-                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass[status]}`}>
-                      {statusLabel(player.totals)}
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass[player.status]}`}>
+                      {statusLabel(kinds, player)}
                     </span>
                   )}
                 </button>
@@ -372,6 +387,99 @@ function Stepper({
   );
 }
 
+const paymentDateFormat = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Europe/Stockholm",
+  day: "numeric",
+  month: "long",
+});
+
+/**
+ * The player's payments, each removable after confirming, and the field for a new one. The field
+ * belongs to the dialog's main form through `formId`, as forms can't be nested.
+ */
+function Payments({
+  lotteryId,
+  player,
+  formId,
+  amount,
+  onAmountChange,
+  owed,
+}: {
+  lotteryId: string;
+  player: LotteryPlayer;
+  formId: string;
+  amount: string;
+  onAmountChange: (amount: string) => void;
+  owed: number;
+}) {
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeState, removeAction, removing] = useActionState(async (previous: LotteryState, formData: FormData) => {
+    const result = await removePayment(previous, formData);
+    if (result.saved) setRemovingId(null);
+    return result;
+  }, {});
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold">Inlämnade pengar</h4>
+      {player.payments.length > 0 && (
+        <ul className="divide-y divide-black/10 text-sm dark:divide-white/10">
+          {player.payments.map((payment) => (
+            <li key={payment.id} className="flex items-center justify-between gap-2 py-1.5">
+              <span>
+                {paymentDateFormat.format(payment.createdAt)}
+                <span className="ml-2 font-semibold tabular-nums">{formatKronor(payment.amount)}</span>
+              </span>
+              {removingId === payment.id ? (
+                <form action={removeAction} className="flex items-center gap-3">
+                  <input type="hidden" name="lotteryId" value={lotteryId} />
+                  <input type="hidden" name="paymentId" value={payment.id} />
+                  <button type="button" onClick={() => setRemovingId(null)} className="text-muted underline">
+                    Avbryt
+                  </button>
+                  <button type="submit" disabled={removing} className="font-semibold text-red-600 dark:text-red-400">
+                    {removing ? "Tar bort…" : "Ta bort"}
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setRemovingId(payment.id)}
+                  aria-label="Ta bort inbetalningen"
+                  className="px-2 text-lg text-muted"
+                >
+                  ×
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <FormError state={removeState} />
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          form={formId}
+          name="amount"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={100000}
+          value={amount}
+          onChange={(event) => onAmountChange(event.target.value)}
+          placeholder="Nytt belopp, kr"
+          aria-label="Nytt belopp i kronor"
+          className="w-36 rounded-lg border border-black/10 bg-transparent px-3 py-2 dark:border-white/10"
+        />
+        {owed > 0 && (
+          <button type="button" onClick={() => onAmountChange(String(owed))} className={secondaryButtonClass}>
+            Allt, {formatKronor(owed)}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TicketsForm({
   lotteryId,
   kinds,
@@ -388,6 +496,8 @@ function TicketsForm({
     Object.fromEntries(kinds.map((kind) => [kind.id, player.tickets[kind.id] ?? noTickets])),
   );
   const [tickets, setTickets] = useState(seenTickets);
+  const [amount, setAmount] = useState("");
+  const formId = useId();
   const [state, action, pending] = useActionState(async (previous: LotteryState, formData: FormData) => {
     const result = await saveTickets(previous, formData);
     if (result.saved) onDone();
@@ -407,13 +517,19 @@ function TicketsForm({
   const set = (kindId: string, key: keyof TicketCounts, value: number) =>
     setTickets({ ...tickets, [kindId]: { ...tickets[kindId], [key]: value } });
 
+  // Payments come from the props, so they follow what is saved while the dialog is open.
   const totals = playerTotals(kinds, tickets);
-  const left = ticketsLeft(totals);
-  const overdrawn = kinds.some((kind) => ticketsLeft(tickets[kind.id]) < 0);
+  const worth = ticketValue(kinds, tickets, ticketsKept);
+  const newAmount = Math.max(0, Math.round(Number(amount) || 0));
+  // What is left before the new amount, which the "Allt" button fills in.
+  const owedBefore = amountOwed(kinds, tickets, player.paid);
+  const owed = owedBefore - newAmount;
+  const overdrawn = kinds.some((kind) => ticketsKept(tickets[kind.id]) < 0);
   const seenTotals = playerTotals(kinds, seenTickets);
-  const showHandOut = ticketStatus(seenTotals) === "none" && usualHandOut(kinds).length > 0;
-  // Only before anything is paid for or handed back, so no money is lost from the records.
-  const canUndo = seenTotals.handedOut > 0 && seenTotals.paid + seenTotals.returned === 0;
+  const showHandOut = seenTotals.handedOut === 0 && usualHandOut(kinds).length > 0;
+  // Only before anything is paid or handed back, so no money is lost from the records.
+  const canUndo = seenTotals.handedOut > 0 && seenTotals.returned === 0 && player.payments.length === 0;
+  const canRemove = seenTotals.handedOut === 0 && player.payments.length === 0;
 
   if (confirming) {
     return (
@@ -445,7 +561,7 @@ function TicketsForm({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {player.handedOutAt && (
         <p className="text-sm text-muted">Utdelat {formatHandedOutAt(player.handedOutAt)}</p>
       )}
@@ -460,74 +576,82 @@ function TicketsForm({
         </form>
       )}
 
-      <form action={action} className="space-y-4">
+      <form id={formId} action={action} className="space-y-4">
         <input type="hidden" name="lotteryId" value={lotteryId} />
         <input type="hidden" name="playerId" value={player.id} />
+        {seenTotals.handedOut > 0 && <h4 className="text-sm font-semibold">Lotter</h4>}
 
         {kinds.map((kind) => {
           const counts = tickets[kind.id];
           const seen = seenTickets[kind.id] ?? noTickets;
-          const kindLeft = ticketsLeft(counts);
           return (
             <fieldset key={kind.id} className="space-y-2">
               <input type="hidden" name="kindId" value={kind.id} />
               <input type="hidden" name={`previous.handedOut.${kind.id}`} value={seen.handedOut} />
-              <input type="hidden" name={`previous.paid.${kind.id}`} value={seen.paid} />
               <input type="hidden" name={`previous.returned.${kind.id}`} value={seen.returned} />
               {kinds.length > 1 && (
-                <legend className="pb-1 text-sm font-semibold">
-                  {kind.name} <span className="font-normal text-muted">· {formatKronor(kind.ticketPrice)}</span>
+                <legend className="pb-1 text-sm">
+                  {kind.name} <span className="text-muted">· {formatKronor(kind.ticketPrice)}</span>
                 </legend>
               )}
               <Stepper name={`handedOut.${kind.id}`} label="Utdelade" value={counts.handedOut} onChange={(value) => set(kind.id, "handedOut", value)} />
-              <Stepper name={`paid.${kind.id}`} label="Betalda" value={counts.paid} onChange={(value) => set(kind.id, "paid", value)} />
               <Stepper name={`returned.${kind.id}`} label="Tillbaka" value={counts.returned} onChange={(value) => set(kind.id, "returned", value)} />
-              {kindLeft > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => set(kind.id, "paid", counts.paid + kindLeft)} className={secondaryButtonClass}>
-                    Resten betalda
-                  </button>
-                  {counts.paid > 0 && (
-                    <button type="button" onClick={() => set(kind.id, "returned", counts.returned + kindLeft)} className={secondaryButtonClass}>
-                      Resten tillbaka
-                    </button>
-                  )}
-                </div>
-              )}
             </fieldset>
           );
         })}
-
-        <p className={`text-sm ${overdrawn ? "text-red-600 dark:text-red-400" : "text-muted"}`}>
-          {overdrawn
-            ? "Betalda och tillbaka är fler än de utdelade."
-            : left > 0
-              ? `${left} ${ticketWord(left)} kvar att redovisa, ${formatKronor(ticketValue(kinds, tickets, ticketsLeft))} om de säljs.`
-              : totals.handedOut > 0
-                ? `Allt redovisat. ${formatKronor(ticketValue(kinds, tickets, (counts) => counts.paid))} betalt.`
-                : "Inga lotter utdelade."}
-        </p>
-
-        <FormError state={state} />
-        <div className="flex items-center justify-end gap-2">
-          {canUndo && (
-            <button type="button" onClick={() => setConfirming("undo")} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
-              Ångra utdelningen
-            </button>
-          )}
-          {seenTotals.handedOut === 0 && (
-            <button type="button" onClick={() => setConfirming("remove")} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
-              Ta bort ur försäljningen
-            </button>
-          )}
-          <button type="button" onClick={onDone} className={secondaryButtonClass}>
-            Avbryt
-          </button>
-          <button type="submit" disabled={pending || handingOut || overdrawn} className={buttonClass}>
-            {pending ? "Sparar…" : "Spara"}
-          </button>
-        </div>
+        {overdrawn && (
+          <p className="text-sm text-red-600 dark:text-red-400">Tillbaka kan inte vara fler än de utdelade.</p>
+        )}
       </form>
+
+      {seenTotals.handedOut > 0 && (
+        <Payments
+          lotteryId={lotteryId}
+          player={player}
+          formId={formId}
+          amount={amount}
+          onAmountChange={setAmount}
+          owed={owedBefore}
+        />
+      )}
+
+      {totals.handedOut > 0 && (
+        <div className="rounded-lg bg-black/5 px-3 py-2 text-sm dark:bg-white/10">
+          <p className="flex justify-between">
+            <span>Lotternas värde</span>
+            <span className="tabular-nums">{formatKronor(worth)}</span>
+          </p>
+          <p className="flex justify-between">
+            <span>Inlämnat</span>
+            <span className="tabular-nums">−{formatKronor(player.paid + newAmount)}</span>
+          </p>
+          <p className="flex justify-between border-t border-black/10 pt-1 font-semibold dark:border-white/10">
+            <span>{owed > 0 ? "Kvar att redovisa" : owed < 0 ? "Inlämnat för mycket" : "Allt redovisat"}</span>
+            <span className="tabular-nums">{formatKronor(Math.abs(owed))}</span>
+          </p>
+        </div>
+      )}
+      {totals.handedOut === 0 && !showHandOut && <p className="text-sm text-muted">Inga lotter utdelade.</p>}
+
+      <FormError state={state} />
+      <div className="flex items-center justify-end gap-2">
+        {canUndo && (
+          <button type="button" onClick={() => setConfirming("undo")} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
+            Ångra utdelningen
+          </button>
+        )}
+        {canRemove && (
+          <button type="button" onClick={() => setConfirming("remove")} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
+            Ta bort ur försäljningen
+          </button>
+        )}
+        <button type="button" onClick={onDone} className={secondaryButtonClass}>
+          Avbryt
+        </button>
+        <button type="submit" form={formId} disabled={pending || handingOut || overdrawn} className={buttonClass}>
+          {pending ? "Sparar…" : "Spara"}
+        </button>
+      </div>
     </div>
   );
 }

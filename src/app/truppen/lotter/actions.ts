@@ -8,6 +8,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { playerRef, recordAudit } from "@/lib/audit";
+import { currentCoach } from "@/lib/auth/sessions";
 import { UserError } from "@/lib/errors";
 
 export type LotteryState = { error?: string; saved?: boolean };
@@ -290,18 +291,22 @@ export async function handOutUsual(_previous: LotteryState, formData: FormData):
   return { saved: true };
 }
 
-const ticketCounts = z.object({ handedOut: count, paid: count, returned: count });
+const ticketCounts = z.object({ handedOut: count, returned: count });
 type TicketInput = z.infer<typeof ticketCounts>;
 
 /**
- * Saves how many tickets of each kind one player has been handed, paid for and handed back.
- * Each kind sends its counts and the counts the coach saw, named `handedOut.<kind id>` and
- * `previous.handedOut.<kind id>`, so a change another coach just saved isn't overwritten.
+ * Saves how many tickets of each kind one player has been handed and has handed back, and
+ * registers the money they handed in, if `amount` is given. Each kind sends its counts and the
+ * counts the coach saw, named `handedOut.<kind id>` and `previous.handedOut.<kind id>`, so a
+ * change another coach just saved isn't overwritten. The money is only registered once the
+ * tickets are saved.
  */
 export async function saveTickets(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
   const ids = z.object({ lotteryId: z.uuid(), playerId: z.uuid() }).safeParse(Object.fromEntries(formData));
   const kindIds = z.array(z.uuid()).min(1).max(10).safeParse(formData.getAll("kindId"));
+  const amount = optional(z.coerce.number().int().min(1).max(100000)).safeParse(formData.get("amount"));
   if (!ids.success || !kindIds.success) return { error: "Lotterna kunde inte sparas. Ladda om sidan och försök igen." };
+  if (!amount.success) return { error: "Skriv beloppet i hela kronor." };
   const { lotteryId, playerId } = ids.data;
 
   const entries: { kindId: string; after: TicketInput; before: TicketInput }[] = [];
@@ -309,76 +314,96 @@ export async function saveTickets(_previous: LotteryState, formData: FormData): 
     const read = (prefix: string) =>
       ticketCounts.safeParse({
         handedOut: formData.get(`${prefix}handedOut.${kindId}`),
-        paid: formData.get(`${prefix}paid.${kindId}`),
         returned: formData.get(`${prefix}returned.${kindId}`),
       });
     const after = read("");
     const before = read("previous.");
     if (!after.success || !before.success) return { error: "Skriv antal lotter med siffror, 0 eller mer." };
-    if (after.data.paid + after.data.returned > after.data.handedOut) {
-      return { error: "Betalda och tillbakalämnade lotter kan inte vara fler än de utdelade." };
+    if (after.data.returned > after.data.handedOut) {
+      return { error: "Tillbakalämnade lotter kan inte vara fler än de utdelade." };
     }
     const changed = (Object.keys(after.data) as (keyof typeof after.data)[]).some(
       (key) => after.data[key] !== before.data[key],
     );
     if (changed) entries.push({ kindId, after: after.data, before: before.data });
   }
-  if (entries.length === 0) return { saved: true };
+  if (entries.length === 0 && !amount.data) return { saved: true };
 
   try {
     const lottery = await openLottery(lotteryId);
-    const values = sql.join(
-      entries.map(
-        ({ kindId, after, before }) =>
-          sql`(${kindId}::uuid, ${after.handedOut}::int, ${after.paid}::int, ${after.returned}::int, ${before.handedOut}::int, ${before.paid}::int, ${before.returned}::int)`,
-      ),
-      sql`, `,
-    );
-    // Writes nothing unless every kind still has the counts the coach saw. A missing row was seen as all zero.
-    const { rows } = await getDb().execute(sql`
-      with input (kind_id, handed_out, paid, returned, seen_handed_out, seen_paid, seen_returned) as (
-        values ${values}
-      ),
-      seen as (
-        select bool_and(
-          coalesce(t.handed_out, 0) = i.seen_handed_out
-          and coalesce(t.paid, 0) = i.seen_paid
-          and coalesce(t.returned, 0) = i.seen_returned
-        ) as unchanged
-        from input i
-        left join lottery_tickets t on t.kind_id = i.kind_id and t.player_id = ${playerId}
-      )
-      insert into lottery_tickets (kind_id, player_id, handed_out, paid, returned, handed_out_at)
-      select i.kind_id, ${playerId}, i.handed_out, i.paid, i.returned, case when i.handed_out > 0 then now() end
-      from input i
-      join lottery_kinds k on k.id = i.kind_id and k.lottery_id = ${lotteryId}
-      join lotteries l on l.id = k.lottery_id and l.closed_at is null
-      where (select unchanged from seen)
-      on conflict (kind_id, player_id) do update
-        set handed_out = excluded.handed_out, paid = excluded.paid, returned = excluded.returned,
-          handed_out_at = case when excluded.handed_out > 0 then coalesce(lottery_tickets.handed_out_at, now()) end,
-          updated_at = now()
-      returning kind_id
-    `);
-    if (rows.length === 0) throw new UserError(ticketsChangedElsewhere);
-    const kinds = await loadKinds(lotteryId);
-    await recordAudit("lottery.tickets", async () => ({
-      lottery: { id: lottery.id, name: lottery.name },
-      player: await playerRef(playerId),
-      kinds: entries.map(({ kindId, before, after }) => ({
-        kind: { id: kindId, name: kinds.find((kind) => kind.id === kindId)?.name },
-        before,
-        after,
-      })),
-    }));
+    if (entries.length > 0) await writeTickets(lottery, playerId, entries);
+    if (amount.data) await insertPayment(lottery, playerId, amount.data);
   } catch (error) {
-    return errorState(error, "Det gick inte att spara lotterna. Försök igen.");
+    return errorState(error, "Det gick inte att spara. Försök igen.");
   }
   revalidatePath("/truppen/lotter", "layout");
   return { saved: true };
 }
 
-/** Takes back all of a player's tickets in a sale, as long as none are paid for or handed back. */
+async function writeTickets(
+  lottery: { id: string; name: string },
+  playerId: string,
+  entries: { kindId: string; after: TicketInput; before: TicketInput }[],
+) {
+  const lotteryId = lottery.id;
+  const values = sql.join(
+    entries.map(
+      ({ kindId, after, before }) =>
+        sql`(${kindId}::uuid, ${after.handedOut}::int, ${after.returned}::int, ${before.handedOut}::int, ${before.returned}::int)`,
+    ),
+    sql`, `,
+  );
+  // Writes nothing unless every kind still has the counts the coach saw. A missing row was seen as all zero.
+  const { rows } = await getDb().execute(sql`
+    with input (kind_id, handed_out, returned, seen_handed_out, seen_returned) as (
+      values ${values}
+    ),
+    seen as (
+      select bool_and(
+        coalesce(t.handed_out, 0) = i.seen_handed_out
+        and coalesce(t.returned, 0) = i.seen_returned
+      ) as unchanged
+      from input i
+      left join lottery_tickets t on t.kind_id = i.kind_id and t.player_id = ${playerId}
+    )
+    insert into lottery_tickets (kind_id, player_id, handed_out, returned, handed_out_at)
+    select i.kind_id, ${playerId}, i.handed_out, i.returned, case when i.handed_out > 0 then now() end
+    from input i
+    join lottery_kinds k on k.id = i.kind_id and k.lottery_id = ${lotteryId}
+    join lotteries l on l.id = k.lottery_id and l.closed_at is null
+    where (select unchanged from seen)
+    on conflict (kind_id, player_id) do update
+      set handed_out = excluded.handed_out, returned = excluded.returned,
+        handed_out_at = case when excluded.handed_out > 0 then coalesce(lottery_tickets.handed_out_at, now()) end,
+        updated_at = now()
+    returning kind_id
+  `);
+  if (rows.length === 0) throw new UserError(ticketsChangedElsewhere);
+  const kinds = await loadKinds(lotteryId);
+  await recordAudit("lottery.tickets", async () => ({
+    lottery: { id: lottery.id, name: lottery.name },
+    player: await playerRef(playerId),
+    kinds: entries.map(({ kindId, before, after }) => ({
+      kind: { id: kindId, name: kinds.find((kind) => kind.id === kindId)?.name },
+      before,
+      after,
+    })),
+  }));
+}
+
+async function insertPayment(lottery: { id: string; name: string }, playerId: string, amount: number) {
+  const coach = await currentCoach();
+  await getDb()
+    .insert(schema.lotteryPayments)
+    .values({ lotteryId: lottery.id, playerId, amount, coachId: coach?.id ?? null });
+  await recordAudit("lottery.payment_add", async () => ({
+    lottery: { id: lottery.id, name: lottery.name },
+    player: await playerRef(playerId),
+    amount,
+  }));
+}
+
+/** Takes back all of a player's tickets in a sale, as long as nothing is paid or handed back. */
 export async function undoHandOut(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
   const form = z.object({ lotteryId: z.uuid(), playerId: z.uuid() }).safeParse(Object.fromEntries(formData));
   if (!form.success) return { error: "Det gick inte att ångra utdelningen. Ladda om sidan och försök igen." };
@@ -396,7 +421,10 @@ export async function undoHandOut(_previous: LotteryState, formData: FormData): 
         and not exists (
           select 1 from lottery_tickets t2
           join lottery_kinds k2 on k2.id = t2.kind_id
-          where k2.lottery_id = ${lotteryId} and t2.player_id = ${playerId} and (t2.paid > 0 or t2.returned > 0)
+          where k2.lottery_id = ${lotteryId} and t2.player_id = ${playerId} and t2.returned > 0
+        )
+        and not exists (
+          select 1 from lottery_payments p where p.lottery_id = ${lotteryId} and p.player_id = ${playerId}
         )
       returning k.name, t.handed_out
     `);
@@ -434,11 +462,14 @@ export async function removeFromLottery(_previous: LotteryState, formData: FormD
         join lottery_kinds k on k.id = t.kind_id
         where k.lottery_id = ${lotteryId} and t.player_id = ${playerId} and t.handed_out > 0
       )
+      and not exists (
+        select 1 from lottery_payments p where p.lottery_id = ${lotteryId} and p.player_id = ${playerId}
+      )
       on conflict (lottery_id, player_id) do update set included = false, updated_at = now()
       returning player_id
     `);
     if (rows.length === 0) {
-      throw new UserError("Spelaren har fått lotter. Ångra utdelningen först för att ta bort spelaren.");
+      throw new UserError("Spelaren har fått lotter eller betalat. Ångra det först för att ta bort spelaren.");
     }
     await recordAudit("lottery.player_remove", async () => ({
       lottery: { id: lottery.id, name: lottery.name },
@@ -472,6 +503,33 @@ export async function addToLottery(_previous: LotteryState, formData: FormData):
     }));
   } catch (error) {
     return errorState(error, "Det gick inte att lägga till spelaren. Försök igen.");
+  }
+  revalidatePath("/truppen/lotter", "layout");
+  return { saved: true };
+}
+
+/** Removes a payment registered by mistake. */
+export async function removePayment(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
+  const form = z.object({ lotteryId: z.uuid(), paymentId: z.uuid() }).safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "Det gick inte att ta bort inbetalningen. Ladda om sidan och försök igen." };
+  const { lotteryId, paymentId } = form.data;
+
+  try {
+    const lottery = await openLottery(lotteryId);
+    const { lotteryPayments } = schema;
+    const [removed] = await getDb()
+      .delete(lotteryPayments)
+      .where(and(eq(lotteryPayments.id, paymentId), eq(lotteryPayments.lotteryId, lotteryId)))
+      .returning({ playerId: lotteryPayments.playerId, amount: lotteryPayments.amount });
+    if (removed) {
+      await recordAudit("lottery.payment_remove", async () => ({
+        lottery: { id: lottery.id, name: lottery.name },
+        player: await playerRef(removed.playerId),
+        amount: removed.amount,
+      }));
+    }
+  } catch (error) {
+    return errorState(error, "Det gick inte att ta bort inbetalningen. Försök igen.");
   }
   revalidatePath("/truppen/lotter", "layout");
   return { saved: true };

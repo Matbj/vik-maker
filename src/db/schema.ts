@@ -276,7 +276,7 @@ export const lotteryTickets = pgTable(
       .notNull()
       .references(() => players.id, { onDelete: "cascade" }),
     handedOut: integer("handed_out").notNull().default(0),
-    /** Tickets the player sold and paid the team for. */
+    /** No longer used and always 0, as payments are kept in kronor in `lottery_payments`. */
     paid: integer("paid").notNull().default(0),
     /** Unsold tickets handed back to the coaches. */
     returned: integer("returned").notNull().default(0),
@@ -310,6 +310,32 @@ export const lotteryPlayers = pgTable(
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.lotteryId, t.playerId] })],
+);
+
+/**
+ * Money a player handed in for a sale. The coaches don't know which tickets were sold, so a
+ * player settles on value: what their tickets are worth, less those handed back and these payments.
+ */
+export const lotteryPayments = pgTable(
+  "lottery_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    lotteryId: uuid("lottery_id")
+      .notNull()
+      .references(() => lotteries.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    /** In whole kronor. */
+    amount: integer("amount").notNull(),
+    /** Who registered it. */
+    coachId: uuid("coach_id").references(() => coaches.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("lottery_payments_lottery_id_idx").on(t.lotteryId),
+    check("lottery_payments_amount_check", sql`${t.amount} > 0`),
+  ],
 );
 
 /** What logged-in coaches have done. The keys in `details` say what each id in it refers to. */
