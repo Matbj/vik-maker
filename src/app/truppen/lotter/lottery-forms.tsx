@@ -22,6 +22,8 @@ import {
   deleteLottery,
   handOutUsual,
   saveTickets,
+  addToLottery,
+  removeFromLottery,
   setLotteryClosed,
   undoHandOut,
   updateLottery,
@@ -396,9 +398,9 @@ function TicketsForm({
     if (result.saved) onDone();
     return result;
   }, {});
-  const [confirmingUndo, setConfirmingUndo] = useState(false);
-  const [undoState, undoAction, undoing] = useActionState(async (previous: LotteryState, formData: FormData) => {
-    const result = await undoHandOut(previous, formData);
+  const [confirming, setConfirming] = useState<"undo" | "remove" | null>(null);
+  const [confirmState, confirmAction, confirmPending] = useActionState(async (previous: LotteryState, formData: FormData) => {
+    const result = await (confirming === "remove" ? removeFromLottery : undoHandOut)(previous, formData);
     if (result.saved) onDone();
     return result;
   }, {});
@@ -413,22 +415,29 @@ function TicketsForm({
   // Only before anything is paid for or handed back, so no money is lost from the records.
   const canUndo = seenTotals.handedOut > 0 && seenTotals.paid + seenTotals.returned === 0;
 
-  if (confirmingUndo) {
+  if (confirming) {
     return (
-      <form action={undoAction} className="space-y-4">
+      <form action={confirmAction} className="space-y-4">
         <input type="hidden" name="lotteryId" value={lotteryId} />
         <input type="hidden" name="playerId" value={player.id} />
         <p className="text-sm">
-          Ångra utdelningen? Spelarens {seenTotals.handedOut} {ticketWord(seenTotals.handedOut)}{" "}
-          tas bort från försäljningen.
+          {confirming === "undo"
+            ? `Ångra utdelningen? Spelarens ${seenTotals.handedOut} ${ticketWord(seenTotals.handedOut)} tas bort från försäljningen.`
+            : "Ta bort spelaren från försäljningen? Du kan lägga till spelaren igen längst ner i listan."}
         </p>
-        <FormError state={undoState} />
+        <FormError state={confirmState} />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => setConfirmingUndo(false)} className={secondaryButtonClass}>
+          <button type="button" onClick={() => setConfirming(null)} className={secondaryButtonClass}>
             Avbryt
           </button>
-          <button type="submit" disabled={undoing} className={dangerButtonClass}>
-            {undoing ? "Ångrar…" : "Ångra utdelningen"}
+          <button type="submit" disabled={confirmPending} className={dangerButtonClass}>
+            {confirming === "undo"
+              ? confirmPending
+                ? "Ångrar…"
+                : "Ångra utdelningen"
+              : confirmPending
+                ? "Tar bort…"
+                : "Ta bort"}
           </button>
         </div>
       </form>
@@ -502,8 +511,13 @@ function TicketsForm({
         <FormError state={state} />
         <div className="flex items-center justify-end gap-2">
           {canUndo && (
-            <button type="button" onClick={() => setConfirmingUndo(true)} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
+            <button type="button" onClick={() => setConfirming("undo")} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
               Ångra utdelningen
+            </button>
+          )}
+          {seenTotals.handedOut === 0 && (
+            <button type="button" onClick={() => setConfirming("remove")} className="mr-auto text-sm text-red-600 underline dark:text-red-400">
+              Ta bort ur försäljningen
             </button>
           )}
           <button type="button" onClick={onDone} className={secondaryButtonClass}>
@@ -515,6 +529,38 @@ function TicketsForm({
         </div>
       </form>
     </div>
+  );
+}
+
+/** Adds a player who isn't in the sale, such as one who isn't active or was taken out. */
+export function AddLotteryPlayerForm({ lotteryId, players }: { lotteryId: string; players: { id: string; name: string }[] }) {
+  const [state, action, pending] = useActionState(addToLottery, {});
+  return (
+    <form action={action} className="space-y-2 pt-2">
+      <input type="hidden" name="lotteryId" value={lotteryId} />
+      <div className="flex gap-2">
+        <select
+          name="playerId"
+          required
+          defaultValue=""
+          aria-label="Spelare att lägga till"
+          className="min-w-0 flex-1 rounded-lg border border-black/10 bg-transparent px-2 py-2 text-sm dark:border-white/10"
+        >
+          <option value="" disabled>
+            Lägg till en spelare
+          </option>
+          {players.map((player) => (
+            <option key={player.id} value={player.id}>
+              {player.name}
+            </option>
+          ))}
+        </select>
+        <button type="submit" disabled={pending} className={buttonClass}>
+          {pending ? "Lägger till…" : "Lägg till"}
+        </button>
+      </div>
+      <FormError state={state} />
+    </form>
   );
 }
 

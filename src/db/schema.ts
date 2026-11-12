@@ -293,6 +293,25 @@ export const lotteryTickets = pgTable(
   ],
 );
 
+/**
+ * A coach's change to who is in a sale, which otherwise holds every active player:
+ * `included` false leaves an active player out, and true adds an inactive one.
+ */
+export const lotteryPlayers = pgTable(
+  "lottery_players",
+  {
+    lotteryId: uuid("lottery_id")
+      .notNull()
+      .references(() => lotteries.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    included: boolean("included").notNull(),
+    ...timestamps,
+  },
+  (t) => [primaryKey({ columns: [t.lotteryId, t.playerId] })],
+);
+
 /** What logged-in coaches have done. The keys in `details` say what each id in it refers to. */
 export const auditLog = pgTable(
   "audit_log",

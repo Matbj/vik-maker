@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { asc, eq, inArray, or } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { LiveUpdates } from "@/components/live-updates";
@@ -17,6 +17,7 @@ import {
   type TicketCounts,
 } from "@/lib/lottery";
 import {
+  AddLotteryPlayerForm,
   CloseLotteryButton,
   DeleteLotteryButton,
   LotteryForm,
@@ -43,8 +44,8 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
   if (!z.uuid().safeParse(id).success) notFound();
 
   const db = getDb();
-  const { lotteries, lotteryKinds, lotteryTickets, players } = schema;
-  const [[lottery], kinds, tickets, liveQueries] = await Promise.all([
+  const { lotteries, lotteryKinds, lotteryPlayers, lotteryTickets, players } = schema;
+  const [[lottery], kinds, tickets, allPlayers, changes, liveQueries] = await Promise.all([
     db.select().from(lotteries).where(eq(lotteries.id, id)),
     db
       .select({
@@ -69,19 +70,26 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
       .from(lotteryTickets)
       .innerJoin(lotteryKinds, eq(lotteryKinds.id, lotteryTickets.kindId))
       .where(eq(lotteryKinds.lotteryId, id)),
+    db
+      .select({ id: players.id, name: players.name, active: players.active })
+      .from(players)
+      .orderBy(asc(players.name)),
+    db
+      .select({ playerId: lotteryPlayers.playerId, included: lotteryPlayers.included })
+      .from(lotteryPlayers)
+      .where(eq(lotteryPlayers.lotteryId, id)),
     sealLotteryLiveQueries(id),
   ]);
   if (!lottery) notFound();
   const liveUrl = realtimeUrl();
 
-  // Active players, and anyone else who still has tickets in this lottery.
-  const holders = [...new Set(tickets.filter((row) => row.handedOut > 0).map((row) => row.playerId))];
-  const playerRows = await db
-    .select({ id: players.id, name: players.name })
-    .from(players)
-    .where(holders.length > 0 ? or(eq(players.active, true), inArray(players.id, holders)) : eq(players.active, true))
-    .orderBy(asc(players.name));
-  const rows: LotteryPlayer[] = playerRows.map((player) => {
+  // Every active player unless a coach left them out, anyone a coach added, and anyone with tickets.
+  const holders = new Set(tickets.filter((row) => row.handedOut > 0).map((row) => row.playerId));
+  const included = new Map(changes.map((change) => [change.playerId, change.included]));
+  const inSale = (player: (typeof allPlayers)[number]) =>
+    holders.has(player.id) || (included.get(player.id) ?? player.active);
+  const addable = allPlayers.filter((player) => !inSale(player)).map(({ id, name }) => ({ id, name }));
+  const rows: LotteryPlayer[] = allPlayers.filter(inSale).map(({ id, name }) => ({ id, name })).map((player) => {
     const own = tickets.filter((row) => row.playerId === player.id);
     const handedOutAt = own.flatMap((row) => (row.handedOutAt ? [row.handedOutAt.getTime()] : []));
     return {
@@ -167,6 +175,7 @@ async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["
         <h2 className="text-lg font-semibold">Spelare</h2>
         {!closed && <p className="text-sm text-muted">Tryck på en spelare för att dela ut lotter eller registrera vad som är betalt och tillbakalämnat.</p>}
         <LotteryPlayers lotteryId={lottery.id} kinds={kinds} closed={closed} players={rows} />
+        {!closed && addable.length > 0 && <AddLotteryPlayerForm lotteryId={lottery.id} players={addable} />}
       </div>
 
       {!closed && (

@@ -34,6 +34,8 @@ export const AUDIT_ACTIONS = {
   "lottery.delete": "Tog bort en lotteriförsäljning",
   "lottery.hand_out": "Delade ut lotter",
   "lottery.undo_hand_out": "Ångrade en utdelning av lotter",
+  "lottery.player_remove": "Tog bort en spelare ur en lotteriförsäljning",
+  "lottery.player_add": "Lade till en spelare i en lotteriförsäljning",
   "lottery.tickets": "Ändrade en spelares lotter",
 } as const;
 

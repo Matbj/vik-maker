@@ -414,3 +414,65 @@ export async function undoHandOut(_previous: LotteryState, formData: FormData): 
   revalidatePath("/truppen/lotter", "layout");
   return { saved: true };
 }
+
+const lotteryPlayerForm = z.object({ lotteryId: z.uuid(), playerId: z.uuid() });
+
+/** Leaves a player out of a sale, as long as they haven't been handed any tickets in it. */
+export async function removeFromLottery(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
+  const form = lotteryPlayerForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "Det gick inte att ta bort spelaren. Ladda om sidan och försök igen." };
+  const { lotteryId, playerId } = form.data;
+
+  try {
+    const lottery = await openLottery(lotteryId);
+    // One statement, so tickets another coach handed out meanwhile stop it.
+    const { rows } = await getDb().execute(sql`
+      insert into lottery_players (lottery_id, player_id, included)
+      select ${lotteryId}, ${playerId}, false
+      where not exists (
+        select 1 from lottery_tickets t
+        join lottery_kinds k on k.id = t.kind_id
+        where k.lottery_id = ${lotteryId} and t.player_id = ${playerId} and t.handed_out > 0
+      )
+      on conflict (lottery_id, player_id) do update set included = false, updated_at = now()
+      returning player_id
+    `);
+    if (rows.length === 0) {
+      throw new UserError("Spelaren har fått lotter. Ångra utdelningen först för att ta bort spelaren.");
+    }
+    await recordAudit("lottery.player_remove", async () => ({
+      lottery: { id: lottery.id, name: lottery.name },
+      player: await playerRef(playerId),
+    }));
+  } catch (error) {
+    return errorState(error, "Det gick inte att ta bort spelaren. Försök igen.");
+  }
+  revalidatePath("/truppen/lotter", "layout");
+  return { saved: true };
+}
+
+/** Adds a player to a sale, such as one who isn't active or was left out earlier. */
+export async function addToLottery(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
+  const form = lotteryPlayerForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "Välj en spelare." };
+  const { lotteryId, playerId } = form.data;
+
+  try {
+    const lottery = await openLottery(lotteryId);
+    await getDb()
+      .insert(schema.lotteryPlayers)
+      .values({ lotteryId, playerId, included: true })
+      .onConflictDoUpdate({
+        target: [schema.lotteryPlayers.lotteryId, schema.lotteryPlayers.playerId],
+        set: { included: true, updatedAt: new Date() },
+      });
+    await recordAudit("lottery.player_add", async () => ({
+      lottery: { id: lottery.id, name: lottery.name },
+      player: await playerRef(playerId),
+    }));
+  } catch (error) {
+    return errorState(error, "Det gick inte att lägga till spelaren. Försök igen.");
+  }
+  revalidatePath("/truppen/lotter", "layout");
+  return { saved: true };
+}
