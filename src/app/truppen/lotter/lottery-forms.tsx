@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Dialog } from "@/components/dialog";
 import {
   formatKronor,
@@ -184,6 +185,8 @@ export function LotteryPlayers({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const selected = players.find((player) => player.id === selectedId);
+  const quickHandOut = (player: LotteryPlayer) =>
+    !closed && ticketsPerPlayer !== null && ticketStatus(player) === "none";
   const shown = filter === "all" ? players : players.filter((player) => ticketStatus(player) === filter);
 
   return (
@@ -216,7 +219,7 @@ export function LotteryPlayers({
       ) : (
         <ul className="divide-y divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
           {shown.map((player) => (
-            <li key={player.id}>
+            <li key={player.id} className="flex items-center">
               <button
                 type="button"
                 disabled={closed}
@@ -224,7 +227,7 @@ export function LotteryPlayers({
                   setSelectedId(player.id);
                   dialogRef.current?.showModal();
                 }}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default"
+                className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4 py-3 text-left disabled:cursor-default"
               >
                 <span className="min-w-0">
                   <span className="block truncate">{player.name}</span>
@@ -235,12 +238,17 @@ export function LotteryPlayers({
                     </span>
                   )}
                 </span>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass[ticketStatus(player)]}`}
-                >
-                  {statusLabel(player)}
-                </span>
+                {!quickHandOut(player) && (
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass[ticketStatus(player)]}`}
+                  >
+                    {statusLabel(player)}
+                  </span>
+                )}
               </button>
+              {quickHandOut(player) && ticketsPerPlayer && (
+                <QuickHandOut lotteryId={lotteryId} playerId={player.id} tickets={ticketsPerPlayer} />
+              )}
             </li>
           ))}
         </ul>
@@ -260,6 +268,31 @@ export function LotteryPlayers({
         )}
       </Dialog>
     </div>
+  );
+}
+
+/** Hands the lottery's usual number of tickets to a player who has none, in one tap. */
+function QuickHandOut({ lotteryId, playerId, tickets }: { lotteryId: string; playerId: string; tickets: number }) {
+  const [state, action, pending] = useActionState(saveTickets, {});
+  return (
+    <form action={action} className="shrink-0 pr-3 text-right">
+      <input type="hidden" name="lotteryId" value={lotteryId} />
+      <input type="hidden" name="playerId" value={playerId} />
+      <input type="hidden" name="handedOut" value={tickets} />
+      <input type="hidden" name="paid" value={0} />
+      <input type="hidden" name="returned" value={0} />
+      <input type="hidden" name="previousHandedOut" value={0} />
+      <input type="hidden" name="previousPaid" value={0} />
+      <input type="hidden" name="previousReturned" value={0} />
+      <button type="submit" disabled={pending} className={`${buttonClass} px-3 py-1.5`}>
+        {pending ? "Delar ut…" : `Dela ut ${tickets}`}
+      </button>
+      {state.error && (
+        <span role="alert" className="block max-w-40 text-xs text-red-600 dark:text-red-400">
+          {state.error}
+        </span>
+      )}
+    </form>
   );
 }
 
@@ -324,9 +357,10 @@ function TicketsForm({
     return result;
   }, {});
   const left = handedOut - paid - returned;
+  const formRef = useRef<HTMLFormElement>(null);
 
   return (
-    <form action={action} className="space-y-4">
+    <form ref={formRef} action={action} className="space-y-4">
       <input type="hidden" name="lotteryId" value={lotteryId} />
       <input type="hidden" name="playerId" value={player.id} />
       <input type="hidden" name="previousHandedOut" value={player.handedOut} />
@@ -341,8 +375,17 @@ function TicketsForm({
 
       <div className="flex flex-wrap gap-2">
         {handedOut === 0 && ticketsPerPlayer && (
-          <button type="button" onClick={() => setHandedOut(ticketsPerPlayer)} className={secondaryButtonClass}>
-            Dela ut {ticketsPerPlayer}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              // Saves right away, as handing out the usual number is the common case.
+              flushSync(() => setHandedOut(ticketsPerPlayer));
+              formRef.current?.requestSubmit();
+            }}
+            className={buttonClass}
+          >
+            Dela ut {ticketsPerPlayer} och spara
           </button>
         )}
         {left > 0 && (
