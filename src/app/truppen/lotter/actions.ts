@@ -28,13 +28,14 @@ const kindFields = z.object({
   id: optional(z.uuid()),
   name: z.string().trim().min(1).max(60),
   ticketPrice: z.coerce.number().int().min(0).max(10000),
+  teamShare: optional(z.coerce.number().int().min(0).max(10000)),
   ticketsPerPlayer: optional(z.coerce.number().int().min(1).max(1000)),
 });
 
 type KindInput = z.infer<typeof kindFields>;
 
 const invalidLottery =
-  "Fyll i ett namn på försäljningen, och ett namn och ett pris för varje sorts lott. Antal per spelare och sista dag kan lämnas tomma.";
+  "Fyll i ett namn på försäljningen, och ett namn och ett pris för varje sorts lott. Lagets del kan inte vara mer än priset. Lagets del, antal per spelare och sista dag kan lämnas tomma.";
 
 const ticketsChangedElsewhere =
   "En annan ledare ändrade precis lotterna för spelaren. Kolla siffrorna och spara igen.";
@@ -50,21 +51,30 @@ function parseKinds(formData: FormData): KindInput[] | null {
   const ids = formData.getAll("kindId");
   const names = formData.getAll("kindName");
   const prices = formData.getAll("kindPrice");
+  const shares = formData.getAll("kindTeamShare");
   const perPlayer = formData.getAll("kindPerPlayer");
   const kinds = z
     .array(kindFields)
     .min(1)
     .max(10)
     .safeParse(
-      names.map((name, i) => ({ id: ids[i], name, ticketPrice: prices[i], ticketsPerPlayer: perPlayer[i] })),
+      names.map((name, i) => ({
+        id: ids[i],
+        name,
+        ticketPrice: prices[i],
+        teamShare: shares[i],
+        ticketsPerPlayer: perPlayer[i],
+      })),
     );
-  return kinds.success ? kinds.data : null;
+  if (!kinds.success) return null;
+  return kinds.data.some((kind) => (kind.teamShare ?? 0) > kind.ticketPrice) ? null : kinds.data;
 }
 
 function kindValues(kind: KindInput, sortOrder: number) {
   return {
     name: kind.name,
     ticketPrice: kind.ticketPrice,
+    teamShare: kind.teamShare ?? null,
     ticketsPerPlayer: kind.ticketsPerPlayer ?? null,
     sortOrder,
   };
@@ -85,6 +95,7 @@ async function loadKinds(lotteryId: string) {
       id: lotteryKinds.id,
       name: lotteryKinds.name,
       ticketPrice: lotteryKinds.ticketPrice,
+      teamShare: lotteryKinds.teamShare,
       ticketsPerPlayer: lotteryKinds.ticketsPerPlayer,
     })
     .from(lotteryKinds)
@@ -105,7 +116,12 @@ export async function createLottery(_previous: LotteryState, formData: FormData)
   await recordAudit("lottery.create", () => ({
     lottery: { id, name: lottery.name },
     dueOn: lottery.dueOn,
-    kinds: kindRows.map(({ name, ticketPrice, ticketsPerPlayer }) => ({ name, ticketPrice, ticketsPerPlayer })),
+    kinds: kindRows.map(({ name, ticketPrice, teamShare, ticketsPerPlayer }) => ({
+      name,
+      ticketPrice,
+      teamShare,
+      ticketsPerPlayer,
+    })),
   }));
   revalidatePath("/truppen/lotter");
   redirect(`/truppen/lotter/${id}`);
@@ -167,13 +183,19 @@ export async function updateLottery(_previous: LotteryState, formData: FormData)
       before: {
         name: before.name,
         dueOn: before.dueOn,
-        kinds: kindsBefore.map(({ name, ticketPrice, ticketsPerPlayer }) => ({ name, ticketPrice, ticketsPerPlayer })),
+        kinds: kindsBefore.map(({ name, ticketPrice, teamShare, ticketsPerPlayer }) => ({
+          name,
+          ticketPrice,
+          teamShare,
+          ticketsPerPlayer,
+        })),
       },
       after: {
         ...after,
-        kinds: kinds.map(({ name, ticketPrice, ticketsPerPlayer }) => ({
+        kinds: kinds.map(({ name, ticketPrice, teamShare, ticketsPerPlayer }) => ({
           name,
           ticketPrice,
+          teamShare: teamShare ?? null,
           ticketsPerPlayer: ticketsPerPlayer ?? null,
         })),
       },
@@ -388,6 +410,68 @@ export async function undoHandOut(_previous: LotteryState, formData: FormData): 
     }));
   } catch (error) {
     return errorState(error, "Det gick inte att ångra utdelningen. Försök igen.");
+  }
+  revalidatePath("/truppen/lotter", "layout");
+  return { saved: true };
+}
+
+const lotteryPlayerForm = z.object({ lotteryId: z.uuid(), playerId: z.uuid() });
+
+/** Leaves a player out of a sale, as long as they haven't been handed any tickets in it. */
+export async function removeFromLottery(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
+  const form = lotteryPlayerForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "Det gick inte att ta bort spelaren. Ladda om sidan och försök igen." };
+  const { lotteryId, playerId } = form.data;
+
+  try {
+    const lottery = await openLottery(lotteryId);
+    // One statement, so tickets another coach handed out meanwhile stop it.
+    const { rows } = await getDb().execute(sql`
+      insert into lottery_players (lottery_id, player_id, included)
+      select ${lotteryId}, ${playerId}, false
+      where not exists (
+        select 1 from lottery_tickets t
+        join lottery_kinds k on k.id = t.kind_id
+        where k.lottery_id = ${lotteryId} and t.player_id = ${playerId} and t.handed_out > 0
+      )
+      on conflict (lottery_id, player_id) do update set included = false, updated_at = now()
+      returning player_id
+    `);
+    if (rows.length === 0) {
+      throw new UserError("Spelaren har fått lotter. Ångra utdelningen först för att ta bort spelaren.");
+    }
+    await recordAudit("lottery.player_remove", async () => ({
+      lottery: { id: lottery.id, name: lottery.name },
+      player: await playerRef(playerId),
+    }));
+  } catch (error) {
+    return errorState(error, "Det gick inte att ta bort spelaren. Försök igen.");
+  }
+  revalidatePath("/truppen/lotter", "layout");
+  return { saved: true };
+}
+
+/** Adds a player to a sale, such as one who isn't active or was left out earlier. */
+export async function addToLottery(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
+  const form = lotteryPlayerForm.safeParse(Object.fromEntries(formData));
+  if (!form.success) return { error: "Välj en spelare." };
+  const { lotteryId, playerId } = form.data;
+
+  try {
+    const lottery = await openLottery(lotteryId);
+    await getDb()
+      .insert(schema.lotteryPlayers)
+      .values({ lotteryId, playerId, included: true })
+      .onConflictDoUpdate({
+        target: [schema.lotteryPlayers.lotteryId, schema.lotteryPlayers.playerId],
+        set: { included: true, updatedAt: new Date() },
+      });
+    await recordAudit("lottery.player_add", async () => ({
+      lottery: { id: lottery.id, name: lottery.name },
+      player: await playerRef(playerId),
+    }));
+  } catch (error) {
+    return errorState(error, "Det gick inte att lägga till spelaren. Försök igen.");
   }
   revalidatePath("/truppen/lotter", "layout");
   return { saved: true };

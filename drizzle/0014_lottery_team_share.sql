@@ -1,0 +1,2 @@
+ALTER TABLE "lottery_kinds" ADD COLUMN "team_share" integer;--> statement-breakpoint
+ALTER TABLE "lottery_kinds" ADD CONSTRAINT "lottery_kinds_team_share_check" CHECK ("lottery_kinds"."team_share" >= 0 and "lottery_kinds"."team_share" <= "lottery_kinds"."ticket_price");
