@@ -17,6 +17,7 @@ import {
 } from "./level-groups";
 import {
   findLeagueMixProblems,
+  findLeagueOrderProblems,
   findTeamProblems,
   findUnevenLeagueProblems,
   leagueSizes,
@@ -46,13 +47,13 @@ const TEAMS_PROMPT = `You split the youth football players at one training sessi
 
 Use exactly teamCount teams, put every player on exactly one team, and make team sizes differ by at most one. Make the teams even in strength by giving each team a similar mix of home levels, so the games are close.
 
-If leagueCount is 2 or 3, split the teams into that many leagues by strength: league 1 gets the strongest players, league 2 the next, and league 3, if there is one, the weakest. "teamsPerLeague" gives how many teams each league has, league 1 first. Set "league" to the league's number on every team. Teams within a league play each other, so give them exactly the same number of players, such as 4 v 4 rather than 5 v 4, and keep them even in strength. When the players don't divide evenly, move a player or two between neighbouring leagues so that whole leagues get the bigger teams, and leave at most one league with uneven teams. A C player shouldn't share a league with A players. If leagueCount is 1, set "league" to null.
+If leagueCount is 2 or 3, split the teams into that many leagues by strength: league 1 gets the strongest players, league 2 the next, and league 3, if there is one, the weakest. Order the players by home level: nobody may play in a weaker league than a player with a weaker home level, so a B1 player never goes in league 3 while a C player is in league 2. Players of the same level can be split across neighbouring leagues to make the numbers work. "teamsPerLeague" gives how many teams each league has, league 1 first. Set "league" to the league's number on every team. Teams within a league play each other, so give them exactly the same number of players, such as 4 v 4 rather than 5 v 4, and keep them even in strength. When the players don't divide evenly, move a player or two between neighbouring leagues so that whole leagues get the bigger teams, and leave at most one league with uneven teams. A C player shouldn't share a league with A players. If leagueCount is 1, set "league" to null.
 
 "recentTeams" lists the teams from recent workouts, newest first. Avoid putting the same players together again when you can, so everyone gets to play with different teammates.
 
 Each player's history is newest first.`;
 
-const KEEP_GROUPS_PROMPT = `"currentGroups" lists the leveled groups the coaches have already made for this workout, strongest first. The coaches want the teams to stay as close to those groups as possible, so move as few players away from their groupmates as you can. With as many teams as groups, make each team one group. With more teams than groups, split each group into teams and keep those teams even with each other. With fewer teams than groups, combine neighbouring groups. With several leagues, the stronger groups go in the lower-numbered leagues. Only move a player when the rules on team count, team sizes and leagues require it, or to honour "keepApart". Staying close to the groups comes before evening out strength between teams from different groups, and before "recentTeams". Players who aren't in any group can go on any team.`;
+const KEEP_GROUPS_PROMPT = `"currentGroups" lists the leveled groups the coaches have already made for this workout, strongest first. The coaches want the teams to stay as close to those groups as possible, so move as few players away from their groupmates as you can. With as many teams as groups, make each team one group. With more teams than groups, split each group into teams and keep those teams even with each other. With fewer teams than groups, combine neighbouring groups. With several leagues, the stronger groups go in the lower-numbered leagues. Only move a player when the rules on team count, team sizes and leagues require it, or to honour "keepApart". Staying close to the groups comes before evening out strength between teams from different groups, before ordering the leagues by home level, and before "recentTeams". Players who aren't in any group can go on any team.`;
 
 const SYSTEM_PROMPT = `You split the youth football players at one training session into leveled groups for their coaches. Each player has a home level set by the coaches. Levels are listed strongest first.
 
@@ -210,6 +211,8 @@ export async function proposeTeams(
       ...findSeparationProblems(proposed, keepApart),
       ...findLeagueMixProblems(proposed, anonymous, levelOrder, options.leagueCount),
       ...findUnevenLeagueProblems(proposed, options.leagueCount),
+      // Kept groups already rotate players a level up or down, so they set the order instead.
+      ...(groupsToKeep.length > 0 ? [] : findLeagueOrderProblems(proposed, anonymous, levelOrder, options.leagueCount)),
     ],
   );
   return teams

@@ -108,6 +108,40 @@ export function findLeagueMixProblems(
   });
 }
 
+/**
+ * Leagues follow the home levels: nobody in a league may have a stronger home level than
+ * anyone in a stronger league. One level can still be split across neighbouring leagues.
+ */
+export function findLeagueOrderProblems(
+  teams: ProposedTeam[],
+  players: GroupingPlayer[],
+  levelOrder: string[],
+  leagueCount: number,
+): string[] {
+  if (leagueCount < 2) return [];
+  const levelOf = new Map(players.map((p) => [p.id, p.levelCode]));
+  const ranks = leagueNumbers(leagueCount).map((league) =>
+    teams
+      .filter((t) => t.league === league)
+      .flatMap((t) => t.playerIds.map((id) => levelOrder.indexOf(levelOf.get(id) ?? "")))
+      .filter((rank) => rank >= 0),
+  );
+  const problems: string[] = [];
+  ranks.forEach((weaker, j) => {
+    ranks.slice(0, j).forEach((stronger, i) => {
+      if (weaker.length === 0 || stronger.length === 0) return;
+      const best = Math.min(...weaker);
+      const worst = Math.max(...stronger);
+      if (best < worst) {
+        problems.push(
+          `League ${j + 1} has a ${levelOrder[best]} player while league ${i + 1} has a ${levelOrder[worst]} player. Swap them so the stronger player is in the stronger league.`,
+        );
+      }
+    });
+  });
+  return problems;
+}
+
 function leagueNumbers(leagueCount: number): number[] {
   return Array.from({ length: leagueCount }, (_, i) => i + 1);
 }
