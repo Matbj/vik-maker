@@ -13,6 +13,7 @@ import { currentCoach } from "@/lib/auth/sessions";
 import { UserError } from "@/lib/errors";
 import { proposeLevelGroups, proposeSpread, proposeTeams } from "@/lib/grouping/claude-groups";
 import { loadGroupingPreferences } from "@/lib/grouping/preferences";
+import { maxLeagueCount } from "@/lib/grouping/teams";
 import {
   loadLevelGroups,
   loadLevelOrder,
@@ -37,7 +38,7 @@ const levelGroupsForm = z.object({
 const teamsForm = z.object({
   workoutId: z.uuid(),
   teamCount: z.coerce.number().int().min(1).max(16),
-  twoLeagues: z.literal("on").optional(),
+  leagueCount: z.coerce.number().int().min(1).max(3).default(1),
   keepGroups: z.literal("on").optional(),
 });
 
@@ -505,7 +506,7 @@ export async function createTeams(
 ): Promise<GroupingState> {
   const form = teamsForm.safeParse(Object.fromEntries(formData));
   if (!form.success) return { error: "Välj mellan 1 och 16 lag." };
-  const { workoutId, teamCount, twoLeagues, keepGroups } = form.data;
+  const { workoutId, teamCount, leagueCount, keepGroups } = form.data;
 
   try {
     const workout = await loadWorkout(workoutId);
@@ -518,7 +519,7 @@ export async function createTeams(
     const teams = await proposeTeams(
       await withHistory(players, workout.startsAt),
       levelOrder,
-      { teamCount, twoLeagues: Boolean(twoLeagues) && teamCount >= 4 },
+      { teamCount, leagueCount: Math.min(leagueCount, maxLeagueCount(teamCount)) },
       await loadRecentTeams(workoutId, workout.startsAt),
       keepGroups ? await loadLevelGroups(workoutId) : [],
       await loadGroupingPreferences(),

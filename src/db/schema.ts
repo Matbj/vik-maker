@@ -184,7 +184,7 @@ export const workoutGroups = pgTable("workout_groups", {
   name: text("name").notNull(),
   /** The levels a leveled group plays at, strongest first. Empty for teams. */
   levelCodes: text("level_codes").array().notNull().default(sql`'{}'::text[]`),
-  /** 1 or 2 when the teams are split into two leagues. */
+  /** 1, 2 or 3 when the teams are split into leagues, with 1 the strongest. */
   league: integer("league"),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,

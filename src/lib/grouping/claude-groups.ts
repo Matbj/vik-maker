@@ -15,7 +15,13 @@ import {
   type SpreadGroup,
   type SpreadPlacement,
 } from "./level-groups";
-import { findLeagueMixProblems, findTeamProblems, type ProposedTeam } from "./teams";
+import {
+  findLeagueMixProblems,
+  findTeamProblems,
+  findUnevenLeagueProblems,
+  leagueSizes,
+  type ProposedTeam,
+} from "./teams";
 import type { PlayerWithHistory } from "./workout-players";
 
 const ATTEMPTS = 3;
@@ -40,13 +46,13 @@ const TEAMS_PROMPT = `You split the youth football players at one training sessi
 
 Use exactly teamCount teams, put every player on exactly one team, and make team sizes differ by at most one. Make the teams even in strength by giving each team a similar mix of home levels, so the games are close.
 
-If twoLeagues is true, split the teams into league 1 and league 2: league 1 gets the stronger players and half of the teams, rounded up, and league 2 gets the rest. Set "league" to 1 or 2 on every team. Teams within a league should be even with each other, and a C player shouldn't share a league with A players. If twoLeagues is false, set "league" to null.
+If leagueCount is 2 or 3, split the teams into that many leagues by strength: league 1 gets the strongest players, league 2 the next, and league 3, if there is one, the weakest. "teamsPerLeague" gives how many teams each league has, league 1 first. Set "league" to the league's number on every team. Teams within a league play each other, so give them exactly the same number of players, such as 4 v 4 rather than 5 v 4, and keep them even in strength. When the players don't divide evenly, move a player or two between neighbouring leagues so that whole leagues get the bigger teams, and leave at most one league with uneven teams. A C player shouldn't share a league with A players. If leagueCount is 1, set "league" to null.
 
 "recentTeams" lists the teams from recent workouts, newest first. Avoid putting the same players together again when you can, so everyone gets to play with different teammates.
 
 Each player's history is newest first.`;
 
-const KEEP_GROUPS_PROMPT = `"currentGroups" lists the leveled groups the coaches have already made for this workout, strongest first. The coaches want the teams to stay as close to those groups as possible, so move as few players away from their groupmates as you can. With as many teams as groups, make each team one group. With more teams than groups, split each group into teams and keep those teams even with each other. With fewer teams than groups, combine neighbouring groups. With two leagues, the stronger groups go in league 1. Only move a player when the rules on team count, team sizes and leagues require it, or to honour "keepApart". Staying close to the groups comes before evening out strength between teams from different groups, and before "recentTeams". Players who aren't in any group can go on any team.`;
+const KEEP_GROUPS_PROMPT = `"currentGroups" lists the leveled groups the coaches have already made for this workout, strongest first. The coaches want the teams to stay as close to those groups as possible, so move as few players away from their groupmates as you can. With as many teams as groups, make each team one group. With more teams than groups, split each group into teams and keep those teams even with each other. With fewer teams than groups, combine neighbouring groups. With several leagues, the stronger groups go in the lower-numbered leagues. Only move a player when the rules on team count, team sizes and leagues require it, or to honour "keepApart". Staying close to the groups comes before evening out strength between teams from different groups, and before "recentTeams". Players who aren't in any group can go on any team.`;
 
 const SYSTEM_PROMPT = `You split the youth football players at one training session into leveled groups for their coaches. Each player has a home level set by the coaches. Levels are listed strongest first.
 
@@ -69,7 +75,7 @@ Each group lists the levels it plays at, strongest first, and the home levels of
 
 Leveled groups have levels. Put a new player in a group of similar level, and never more than one level away from their home level. A player with no home level can go anywhere. A player who has missed several recent workouts leans towards their own level or one below, and a regular who has stayed at their level can sometimes go one up.
 
-Teams have no levels. Keep every team even in both size and strength, comparing the members' home levels. Teams in a league should stay comparable to each other. League 1 has the stronger players, so put stronger new players there, and avoid having a C player in the same league as A players.
+Teams have no levels. Keep every team even in both size and strength, comparing the members' home levels. Teams in a league should stay comparable to each other. League 1 has the strongest players and higher-numbered leagues weaker ones, so put new players in a league that matches their level, and avoid having a C player in the same league as A players.
 
 Each player's history is newest first. Every new player must be placed exactly once, using the given ids.`;
 
@@ -164,13 +170,13 @@ export async function proposeLevelGroups(
 }
 
 /**
- * Asks Claude for even teams, optionally split into two leagues by level.
+ * Asks Claude for even teams, optionally split into two or three leagues by level.
  * With currentGroups, the teams stay as close to those groups as possible.
  */
 export async function proposeTeams(
   players: PlayerWithHistory[],
   levelOrder: string[],
-  options: { teamCount: number; twoLeagues: boolean },
+  options: { teamCount: number; leagueCount: number },
   recentTeams: string[][][],
   currentGroups: string[][],
   preferences: Preferences,
@@ -184,6 +190,7 @@ export async function proposeTeams(
     .filter((group) => group.length > 0);
   const input = JSON.stringify({
     ...options,
+    ...(options.leagueCount > 1 && { teamsPerLeague: leagueSizes(options.teamCount, options.leagueCount) }),
     levelsStrongestFirst: levelOrder,
     players: anonymous.map(({ id, levelCode, history }) => ({ id, homeLevel: levelCode, history })),
     recentTeams: recentTeams.map((teams) =>
@@ -201,12 +208,13 @@ export async function proposeTeams(
     ({ teams: proposed }) => findTeamProblems(proposed, anonymous, options),
     ({ teams: proposed }) => [
       ...findSeparationProblems(proposed, keepApart),
-      ...findLeagueMixProblems(proposed, anonymous, levelOrder),
+      ...findLeagueMixProblems(proposed, anonymous, levelOrder, options.leagueCount),
+      ...findUnevenLeagueProblems(proposed, options.leagueCount),
     ],
   );
   return teams
     .map((team) => ({
-      league: options.twoLeagues ? team.league : null,
+      league: options.leagueCount > 1 ? team.league : null,
       playerIds: team.playerIds.map((id) => realIds.get(id)!),
     }))
     .sort((a, b) => (a.league ?? 0) - (b.league ?? 0));
