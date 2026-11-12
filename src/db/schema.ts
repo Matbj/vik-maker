@@ -1,5 +1,7 @@
 import {
   boolean,
+  check,
+  date,
   index,
   integer,
   jsonb,
@@ -227,6 +229,51 @@ export const appSettings = pgTable("app_settings", {
   ...timestamps,
 });
 
+/** A lottery sale, such as Bingolotter one autumn, where the players sell tickets for the team. */
+export const lotteries = pgTable(
+  "lotteries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    /** What one ticket costs, in whole kronor. */
+    ticketPrice: integer("ticket_price").notNull(),
+    /** How many tickets a player is usually handed, offered when handing out. */
+    ticketsPerPlayer: integer("tickets_per_player"),
+    /** The last day to pay for sold tickets and hand back the rest. */
+    dueOn: date("due_on"),
+    /** Set when the coaches have finished the sale. It is then only shown, not changed. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [check("lotteries_ticket_price_check", sql`${t.ticketPrice} >= 0`)],
+);
+
+/** The tickets one player has been handed in a lottery, and what has come back for them. */
+export const lotteryTickets = pgTable(
+  "lottery_tickets",
+  {
+    lotteryId: uuid("lottery_id")
+      .notNull()
+      .references(() => lotteries.id, { onDelete: "cascade" }),
+    playerId: uuid("player_id")
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    handedOut: integer("handed_out").notNull().default(0),
+    /** Tickets the player sold and paid the team for. */
+    paid: integer("paid").notNull().default(0),
+    /** Unsold tickets handed back to the coaches. */
+    returned: integer("returned").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.lotteryId, t.playerId] }),
+    check(
+      "lottery_tickets_counts_check",
+      sql`${t.paid} >= 0 and ${t.returned} >= 0 and ${t.paid} + ${t.returned} <= ${t.handedOut}`,
+    ),
+  ],
+);
+
 /** What logged-in coaches have done. The keys in `details` say what each id in it refers to. */
 export const auditLog = pgTable(
   "audit_log",
@@ -249,3 +296,4 @@ export type Coach = typeof coaches.$inferSelect;
 export type Workout = typeof workouts.$inferSelect;
 export type NewWorkout = typeof workouts.$inferInsert;
 export type WorkoutGroup = typeof workoutGroups.$inferSelect;
+export type Lottery = typeof lotteries.$inferSelect;

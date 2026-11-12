@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/", label: "Träningar" },
   { href: "/truppen", label: "Truppen" },
+  { href: "/lotter", label: "Lotter" },
 ] as const;
 
 /** Thumb-reachable tab bar on phones; sits at the bottom on all sizes for now. */

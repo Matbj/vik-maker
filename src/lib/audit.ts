@@ -27,6 +27,13 @@ export const AUDIT_ACTIONS = {
   "separation.add": "Lade till ett par att hålla isär",
   "separation.remove": "Tog bort ett par att hålla isär",
   "grouping_notes.update": "Ändrade anteckningarna för gruppindelning",
+  "lottery.create": "Skapade en lotteriförsäljning",
+  "lottery.update": "Ändrade en lotteriförsäljning",
+  "lottery.close": "Avslutade en lotteriförsäljning",
+  "lottery.reopen": "Öppnade en lotteriförsäljning igen",
+  "lottery.delete": "Tog bort en lotteriförsäljning",
+  "lottery.hand_out_all": "Delade ut lotter till alla",
+  "lottery.tickets": "Ändrade en spelares lotter",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
