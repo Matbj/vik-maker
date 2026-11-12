@@ -11,6 +11,9 @@ import { LotteryForm } from "./lottery-forms";
 export default function LotteriesPage() {
   return (
     <section className="space-y-6">
+      <Link href="/truppen" className="inline-block text-sm text-muted">
+        ← Truppen
+      </Link>
       <Suspense fallback={<p className="text-sm text-muted">Laddar lotterierna…</p>}>
         <Lotteries />
       </Suspense>
@@ -92,7 +95,7 @@ function LotteryList({
         {lotteries.map((lottery) => (
           <li key={lottery.id}>
             <Link
-              href={`/lotter/${lottery.id}`}
+              href={`/truppen/lotter/${lottery.id}`}
               className="block rounded-xl border border-black/10 px-4 py-3 dark:border-white/10"
             >
               <span className="flex items-baseline justify-between gap-3">

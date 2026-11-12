@@ -14,10 +14,10 @@ import {
   LotteryPlayers,
 } from "../lottery-forms";
 
-export default function LotteryPage({ params }: PageProps<"/lotter/[id]">) {
+export default function LotteryPage({ params }: PageProps<"/truppen/lotter/[id]">) {
   return (
     <section className="space-y-6">
-      <Link href="/lotter" className="inline-block text-sm text-muted">
+      <Link href="/truppen/lotter" className="inline-block text-sm text-muted">
         ← Lotter
       </Link>
       <Suspense fallback={<p className="text-sm text-muted">Laddar försäljningen…</p>}>
@@ -27,7 +27,7 @@ export default function LotteryPage({ params }: PageProps<"/lotter/[id]">) {
   );
 }
 
-async function Lottery({ params }: { params: PageProps<"/lotter/[id]">["params"] }) {
+async function Lottery({ params }: { params: PageProps<"/truppen/lotter/[id]">["params"] }) {
   await connection();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 const titles: Record<string, string> = {
   "/": "Träningar",
   "/truppen": "Truppen",
-  "/lotter": "Lotter",
+  "/truppen/lotter": "Lotter",
   "/installningar": "Inställningar",
   "/installningar/logging": "Logg",
   "/logga-in": "Logga in",
@@ -16,7 +16,7 @@ export function PageTitle() {
   const pathname = usePathname();
   const title = pathname.startsWith("/traningar/")
     ? "Träning"
-    : pathname.startsWith("/lotter/")
+    : pathname.startsWith("/truppen/lotter/")
       ? "Lotteri"
       : titles[pathname];
   if (!title) return null;

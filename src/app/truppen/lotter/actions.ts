@@ -80,8 +80,8 @@ export async function createLottery(_previous: LotteryState, formData: FormData)
     ticketsPerPlayer: lottery.ticketsPerPlayer,
     dueOn: lottery.dueOn,
   }));
-  revalidatePath("/lotter");
-  redirect(`/lotter/${lottery.id}`);
+  revalidatePath("/truppen/lotter");
+  redirect(`/truppen/lotter/${lottery.id}`);
 }
 
 export async function updateLottery(_previous: LotteryState, formData: FormData): Promise<LotteryState> {
@@ -110,7 +110,7 @@ export async function updateLottery(_previous: LotteryState, formData: FormData)
   } catch (error) {
     return errorState(error, "Det gick inte att spara försäljningen. Försök igen.");
   }
-  revalidatePath("/lotter", "layout");
+  revalidatePath("/truppen/lotter", "layout");
   return { saved: true };
 }
 
@@ -135,7 +135,7 @@ export async function setLotteryClosed(formData: FormData) {
   if (changed.length > 0) {
     await recordAudit(closed ? "lottery.close" : "lottery.reopen", () => ({ lottery: changed[0] }));
   }
-  revalidatePath("/lotter", "layout");
+  revalidatePath("/truppen/lotter", "layout");
 }
 
 export async function deleteLottery(formData: FormData) {
@@ -147,8 +147,8 @@ export async function deleteLottery(formData: FormData) {
     .where(eq(schema.lotteries.id, lotteryId.data))
     .returning({ id: schema.lotteries.id, name: schema.lotteries.name });
   if (removed.length > 0) await recordAudit("lottery.delete", () => ({ lottery: removed[0] }));
-  revalidatePath("/lotter", "layout");
-  redirect("/lotter");
+  revalidatePath("/truppen/lotter", "layout");
+  redirect("/truppen/lotter");
 }
 
 /** Hands the same number of tickets to every active player who hasn't been given any yet. */
@@ -183,7 +183,7 @@ export async function handOutToAll(_previous: LotteryState, formData: FormData):
   } catch (error) {
     return errorState(error, "Det gick inte att dela ut lotterna. Försök igen.");
   }
-  revalidatePath("/lotter", "layout");
+  revalidatePath("/truppen/lotter", "layout");
   return { saved: true };
 }
 
@@ -237,6 +237,6 @@ export async function saveTickets(_previous: LotteryState, formData: FormData): 
   } catch (error) {
     return errorState(error, "Det gick inte att spara lotterna. Försök igen.");
   }
-  revalidatePath("/lotter", "layout");
+  revalidatePath("/truppen/lotter", "layout");
   return { saved: true };
 }
