@@ -229,8 +229,6 @@ export type PersonRow = {
   answer: "attending" | "declined" | "unanswered" | null;
   /** Whether they count as there on the page's own data: checked off, or until then said yes. */
   present: boolean;
-  /** A player in no group or team, who has no other row to be checked off in. */
-  loose?: boolean;
 };
 
 /**
@@ -249,6 +247,7 @@ const ANSWERS = {
   declined: { label: "Kan ej", order: 2, className: "text-red-700 dark:text-red-400" },
   none: { label: "Ej kallad", order: 3, className: "text-muted" },
 } as const;
+const NO_SHOW = { label: "Uteblev", order: 0, className: "text-red-700 dark:text-red-400" } as const;
 
 /**
  * The workout's coaches or players with what each of them answered. Folded, as the groups
@@ -260,29 +259,25 @@ export function AttendanceList({
   kind,
   people,
   checked,
-  hasGroups = false,
 }: {
   kind: "coach" | "player";
   people: PersonRow[];
   checked: boolean;
-  /** For players: whether the workout has groups or teams, which then hold most of the checks. */
-  hasGroups?: boolean;
 }) {
   const attendance = useAttendance();
   if (people.length === 0) return null;
 
   const isHere = (person: PersonRow) => (attendance ? attendance.isPresent(kind, person.id) : person.present);
-  const answerOf = (person: PersonRow) => ANSWERS[person.answer ?? "none"];
+  // At a started workout, someone who said yes and isn't checked off didn't turn up.
+  const noShow = (person: PersonRow) => attendance !== null && person.answer === "attending" && !isHere(person);
+  const answerOf = (person: PersonRow) => (noShow(person) ? NO_SHOW : ANSWERS[person.answer ?? "none"]);
   // Among the players, those who haven't answered come first, as they are the ones to chase.
   const orderOf = (person: PersonRow) => (kind === "player" && person.answer === "unanswered" ? -1 : answerOf(person).order);
   const rows = [...people].sort((a, b) => orderOf(a) - orderOf(b) || a.name.localeCompare(b.name, "sv"));
   const here = rows.filter(isHere);
   const count = (answer: PersonRow["answer"]) => people.filter((person) => person.answer === answer).length;
   const asked = people.filter((person) => person.answer !== null).length;
-  // A late yes doesn't check anyone off, so say when someone who may have turned up has no row to be found in.
-  const expected = attendance
-    ? rows.filter((person) => person.loose && person.answer === "attending" && !isHere(person)).length
-    : 0;
+  const noShows = kind === "player" ? rows.filter(noShow) : [];
 
   return (
     <details
@@ -311,9 +306,9 @@ export function AttendanceList({
             {checked && `${count("attending")} kommer · `}
             {count("declined")} kan ej · {count("unanswered")} inget svar
           </span>
-          {expected > 0 && (
-            <span className="block text-xs font-medium text-accent">
-              {expected} {hasGroups ? "utan grupp " : ""}har svarat Kommer men är inte {expected === 1 ? "ibockad" : "ibockade"}
+          {noShows.length > 0 && (
+            <span className="block text-xs font-medium text-red-700 dark:text-red-400">
+              Uteblev: {noShows.map((person) => person.name).join(", ")}
             </span>
           )}
         </span>
