@@ -170,7 +170,6 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
       detail: levelCode,
       answer: row?.playerResponse ?? null,
       present: here.has(playerId),
-      loose: !inGroup.has(playerId) && !inTeam.has(playerId),
     };
   });
   const askedCoaches = new Map(coachAttendance.everyone.map((coach) => [coach.id, coach]));
@@ -219,7 +218,7 @@ async function Workout({ params }: { params: PageProps<"/traningar/[id]">["param
             error={workout.presencePushError}
           />
           <AttendanceList kind="coach" people={coachRows} checked />
-          <AttendanceList kind="player" people={playerRows} checked hasGroups={groups.length > 0} />
+          <AttendanceList kind="player" people={playerRows} checked />
         </div>
       ) : (
         <div className="space-y-3">
