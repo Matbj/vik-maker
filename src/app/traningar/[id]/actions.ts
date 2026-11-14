@@ -155,8 +155,9 @@ export async function refreshAttendance(
 }
 
 /**
- * Switches the workout to live for every coach: the attendance is filled in from the answers
- * and saved to svenskalag.se, and from then each coach checks off their players here.
+ * Switches the workout to live for every coach: the attendance is filled in from the answers,
+ * or with nobody present as the coach chose, and saved to svenskalag.se, and from then each
+ * coach checks off their players here.
  */
 export async function startWorkout(
   _previous: GroupingState,
@@ -164,6 +165,8 @@ export async function startWorkout(
 ): Promise<GroupingState> {
   const workoutId = z.uuid().safeParse(formData.get("workoutId"));
   if (!workoutId.success) return { error: "Den här träningen finns inte längre." };
+  const presence = z.enum(["attending", "nobody"]).safeParse(formData.get("presence"));
+  if (!presence.success) return { error: "Välj vilka som ska vara närvarande från start." };
 
   try {
     const workout = await loadWorkout(workoutId.data);
@@ -181,12 +184,13 @@ export async function startWorkout(
       console.error("refreshing the attendance before the start failed:", error);
     }
 
-    const start = await startLiveAttendance(workout.id, coach.id);
+    const start = await startLiveAttendance(workout.id, coach.id, presence.data);
     if (start.started) {
       // A failed save is shown on the page, which then offers to try again.
       await pushPresence(workout.id, { verify: true });
       await recordAudit("workout.start", async () => ({
         workout: await workoutRef(workout.id),
+        presence: presence.data,
         seededPlayers: start.seededPlayers,
         seededCoaches: start.seededCoaches,
       }));

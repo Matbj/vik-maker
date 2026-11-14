@@ -1,8 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { Dialog } from "@/components/dialog";
 import { PUSH_CATCH_UP_MS } from "@/lib/attendance/times";
-import { pushPresenceNow, startWorkout } from "./actions";
+import { pushPresenceNow, startWorkout, type GroupingState } from "./actions";
+import type { StartPresence } from "@/lib/attendance/live";
 import { AttendanceToggle, CheckMark, useAttendance } from "./attendance-state";
 import { buttonClass, cancelButtonClass, FormError } from "./grouping-forms";
 
@@ -11,13 +13,16 @@ const LONGEST_TIMER_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Starts the workout for every coach. Appears when the attendance opens, 15 minutes before
- * the start, also on a page that was opened earlier and has been left open.
+ * the start, also on a page that was opened earlier and has been left open. A dialog asks
+ * whether those who said yes start as present or nobody does, unless a check is already
+ * registered, which the start keeps either way.
  */
 export function StartWorkoutButton({
   workoutId,
   opensAt,
   open: openOnServer,
   label,
+  registered,
 }: {
   workoutId: string;
   /** Milliseconds since the epoch. */
@@ -25,8 +30,15 @@ export function StartWorkoutButton({
   /** Whether it had opened when the page was made. */
   open: boolean;
   label: string;
+  /** Whether an attendance check is already registered, such as one fetched from svenskalag.se. */
+  registered: boolean;
 }) {
-  const [state, action, pending] = useActionState(startWorkout, {});
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [state, action, pending] = useActionState(async (previous: GroupingState, formData: FormData) => {
+    const result = await startWorkout(previous, formData);
+    dialogRef.current?.close();
+    return result;
+  }, {});
   const [opened, setOpened] = useState(false);
 
   useEffect(() => {
@@ -41,11 +53,77 @@ export function StartWorkoutButton({
   return (
     <form action={action} className="space-y-2">
       <input type="hidden" name="workoutId" value={workoutId} />
-      <button type="submit" disabled={pending} className={`${buttonClass} w-full py-3 text-base`}>
-        {pending ? "Startar…" : label}
-      </button>
+      {registered ? (
+        <button
+          type="submit"
+          name="presence"
+          value="attending"
+          disabled={pending}
+          className={`${buttonClass} w-full py-3 text-base`}
+        >
+          {pending ? "Startar…" : label}
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            disabled={pending}
+            onClick={() => dialogRef.current?.showModal()}
+            className={`${buttonClass} w-full py-3 text-base`}
+          >
+            {pending ? "Startar…" : label}
+          </button>
+          <Dialog dialogRef={dialogRef} title={label} text="Vilka ska vara närvarande från start? Du kan ändra för var och en efteråt.">
+            <div className="space-y-2">
+              <StartChoice
+                value="attending"
+                title="De som svarat Kommer"
+                subtitle="Spelare och ledare som svarat Kommer bockas i."
+                disabled={pending}
+              />
+              <StartChoice
+                value="nobody"
+                title="Ingen"
+                subtitle="Alla börjar utan bock, och ni bockar i de som är här."
+                disabled={pending}
+              />
+            </div>
+            <div className="flex justify-end">
+              <button type="button" onClick={() => dialogRef.current?.close()} className={cancelButtonClass}>
+                Avbryt
+              </button>
+            </div>
+          </Dialog>
+        </>
+      )}
       <FormError state={state} />
     </form>
+  );
+}
+
+function StartChoice({
+  value,
+  title,
+  subtitle,
+  disabled,
+}: {
+  value: StartPresence;
+  title: string;
+  subtitle: string;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="submit"
+      name="presence"
+      value={value}
+      disabled={disabled}
+      className="block w-full rounded-lg border border-black/10 px-3 py-2.5 text-left text-sm transition-colors enabled:hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:enabled:hover:bg-white/5"
+    >
+      <span className="block font-medium">{title}</span>
+      <span className="block text-xs text-muted">{subtitle}</span>
+    </button>
   );
 }
 

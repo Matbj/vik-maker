@@ -2,13 +2,18 @@ import "server-only";
 import { eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 
+/** Who starts as present: whoever said yes, or nobody. */
+export type StartPresence = "attending" | "nobody";
+
 /**
  * Starts a workout, once: from then the coaches fill in the attendance here. Whoever said
- * yes starts as present and everyone else as absent, unless an attendance check is already
- * registered, which is then kept. One statement, so two coaches pressing at once start it
- * once, and nobody sees a started workout that isn't filled in yet.
+ * yes starts as present and everyone else as absent, or everyone as absent with `nobody`,
+ * unless an attendance check is already registered, which is then kept. One statement, so
+ * two coaches pressing at once start it once, and nobody sees a started workout that isn't
+ * filled in yet.
  */
-export async function startLiveAttendance(workoutId: string, coachId: string) {
+export async function startLiveAttendance(workoutId: string, coachId: string, presence: StartPresence) {
+  const nobody = presence === "nobody";
   const { rows } = await getDb().execute(sql`
     with claimed as (
       update workouts
@@ -27,7 +32,7 @@ export async function startLiveAttendance(workoutId: string, coachId: string) {
     ),
     seeded_players as (
       update workout_attendance
-      set coach_check = (case when player_response = 'attending' then 'present' else 'absent' end)::coach_check,
+      set coach_check = (case when not ${nobody}::boolean and player_response = 'attending' then 'present' else 'absent' end)::coach_check,
         updated_at = now()
       where workout_id = ${workoutId}::uuid
         and exists (select 1 from claimed) and exists (select 1 from unregistered)
@@ -35,7 +40,7 @@ export async function startLiveAttendance(workoutId: string, coachId: string) {
     ),
     seeded_coaches as (
       update workout_coach_attendance
-      set coach_check = (case when response = 'attending' then 'present' else 'absent' end)::coach_check,
+      set coach_check = (case when not ${nobody}::boolean and response = 'attending' then 'present' else 'absent' end)::coach_check,
         updated_at = now()
       where workout_id = ${workoutId}::uuid
         and exists (select 1 from claimed) and exists (select 1 from unregistered)
